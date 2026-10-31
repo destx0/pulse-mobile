@@ -41,7 +41,10 @@ scripts/github-release.sh "$v" ~/personal/pulse-mobile-builds/pulse-mobile-$v-*.
 ```
 
 The release is `v<version>`, titled "Pulse Mobile <version>", with assets `pulse-mobile-<version>-arm64.apk`, `-armv7` and
-`-x86_64`. The script refuses a version that is not `app.json`'s, creates the release on `HEAD` with GitHub's generated notes, or adds to it when the tag already has one, and prints each APK's download link. It reads the token from `$GH_TOKEN`, which `~/.zshrc` sets to the adityaongit account's under `~/personal/` (its `$GITHUB_TOKEN` is the work account's and is ignored), else from git's credential helper. Any single APK can be added later the same way.
+`-x86_64`. The script publishes to the repository `origin` points to; set `GH_REPO=owner/name` to override it. It refuses
+a version that is not `app.json`'s, creates the release on `HEAD` with GitHub's generated notes, or adds to it when the
+tag already has one, and prints each APK's download link. It reads the token from `$GH_TOKEN`, else from git's credential
+helper. Any single APK can be added later the same way.
 
 ## How installed phones hear of a release
 
@@ -55,7 +58,8 @@ hides the card until the app is next started; there is no skipping a version.
 
 So a release needs nothing more than the steps above: the tag `v<version>` and the assets `pulse-mobile-<version>-<abi>.apk`.
 An update installs over the old app only when it is signed with the same key, so every release is built with the same
-EAS credentials.
+EAS credentials. A separately created EAS project gets its own keystore: its APK cannot install over an app signed by
+another project, and replacing that app means uninstalling it and losing local data.
 
 ```mermaid
 flowchart LR
