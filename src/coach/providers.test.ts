@@ -95,9 +95,10 @@ async function run(provider: string, model: string, fetch: Fetch, choice: { apiK
 }
 
 describe("providers", () => {
-  it("lists the web's five providers and the person's own server, Anthropic defaulting to the current Claude model", () => {
-    expect(PROVIDERS.map((p) => p.id)).toEqual(["anthropic", "openai", "google", "gateway", "openrouter", "custom"]);
+  it("lists the web's providers, OpenCode Go and the person's own server, Anthropic defaulting to the current Claude model", () => {
+    expect(PROVIDERS.map((p) => p.id)).toEqual(["anthropic", "openai", "google", "gateway", "openrouter", "opencode", "custom"]);
     expect(providerOf("anthropic")?.model).toBe("claude-opus-5-5");
+    expect(providerOf("opencode")?.model).toBe("deepseek-v4.1-flash");
     expect(modelFor({ provider: "anthropic", model: "claude-opus-5-5", apiKey: null })).toBeNull();
     expect(modelFor({ provider: "nope", model: "x", apiKey: KEY })).toBeNull();
   });
@@ -125,6 +126,17 @@ describe("providers", () => {
     expect(calls[0].headers.authorization).toBe(`Bearer ${KEY}`);
     expect(calls[0].body).toMatchObject({ model: "anthropic/claude-sonnet-5.5", stream: true });
     expect(JSON.stringify(calls[1].body.messages)).toContain("call_1");
+  });
+
+  it("OpenCode Go: OpenAI-compatible at the Go endpoint with a bearer key and a session header", async () => {
+    const { fetch, calls } = fakeFetch([OPENAI_COMPAT_TOOL, OPENAI_COMPAT_TEXT]);
+    const r = await run("opencode", "deepseek-v4.1-flash", fetch);
+    expect(r.text).toBe("You’re 36, so **easy** today.");
+    expect(r.toolResults).toEqual([expect.objectContaining({ age: 36 })]);
+    expect(calls[0].url).toBe("https://opencode.ai/inference/go/openai/v1/chat/completions");
+    expect(calls[0].headers.authorization).toBe(`Bearer ${KEY}`);
+    expect(calls[0].headers["x-opencode-session"]).toMatch(/^pulse-coach-/);
+    expect(calls[0].body).toMatchObject({ model: "deepseek-v4.1-flash", stream: true });
   });
 
   it("your own server: OpenAI-compatible at the URL the person gave, with no Authorization header without a key", async () => {
@@ -163,6 +175,7 @@ describe("key test", () => {
     expect(checkProvider({ provider: "openai", model: "gpt-5.4-mini", apiKey: "" })).toEqual({ ok: false, error: "Paste your API key." });
     expect(checkProvider({ provider: "openai", model: "gpt-5.4-mini", apiKey: "short" })).toEqual({ ok: false, error: "That key looks too short." });
     expect(checkProvider({ provider: "openrouter", model: "anthropic/claude-sonnet-5.5", apiKey: `  ${KEY} ` })).toEqual({ ok: true, provider: "openrouter", model: "anthropic/claude-sonnet-5.5", apiKey: KEY, baseUrl: null });
+    expect(checkProvider({ provider: "opencode", model: "deepseek-v4.1-flash", apiKey: KEY })).toEqual({ ok: true, provider: "opencode", model: "deepseek-v4.1-flash", apiKey: KEY, baseUrl: null });
     // The person's own server: its http(s) address, and a key only if given.
     expect(checkProvider({ provider: "custom", model: "llama3.1:8b", apiKey: "", baseUrl: "ollama.local" })).toEqual({ ok: false, error: "Enter your server’s address, starting with http:// or https://." });
     expect(checkProvider({ provider: "custom", model: "llama3.1:8b", apiKey: "", baseUrl: " http://192.168.1.20:11434/v1/ " })).toEqual({ ok: true, provider: "custom", model: "llama3.1:8b", apiKey: null, baseUrl: "http://192.168.1.20:11434/v1" });

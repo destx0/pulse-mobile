@@ -10,7 +10,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createGateway, type LanguageModel } from "ai";
 import { i18n } from "@/i18n/config";
 
-export type ProviderId = "openai" | "anthropic" | "google" | "gateway" | "openrouter" | "custom";
+export type ProviderId = "openai" | "anthropic" | "google" | "gateway" | "openrouter" | "opencode" | "custom";
 
 /** The AI SDK's fetch shape; expo/fetch is cast to it where it is created (net.ts). */
 export type Fetch = typeof globalThis.fetch;
@@ -26,6 +26,9 @@ export type Provider = {
   custom?: true;
   create: (apiKey: string | null, model: string, fetch?: Fetch, baseUrl?: string) => LanguageModel;
 };
+
+/** OpenCode Go asks clients for a stable session id per conversation; one app session is enough for the coach. */
+const OPENCODE_SESSION = `pulse-coach-${Math.random().toString(36).slice(2, 10)}`;
 
 export const PROVIDERS: Provider[] = [
   {
@@ -62,6 +65,20 @@ export const PROVIDERS: Provider[] = [
     model: "anthropic/claude-sonnet-5.5",
     keyUrl: "https://openrouter.ai/settings/keys",
     create: (apiKey, model, fetch) => createOpenAICompatible({ name: "openrouter", baseURL: "https://openrouter.ai/api/v1", apiKey: apiKey!, fetch })(model),
+  },
+  {
+    id: "opencode",
+    label: "OpenCode Go",
+    model: "deepseek-v4.1-flash",
+    keyUrl: "https://opencode.ai/console",
+    create: (apiKey, model, fetch) =>
+      createOpenAICompatible({
+        name: "opencode",
+        baseURL: "https://opencode.ai/inference/go/openai/v1",
+        apiKey: apiKey!,
+        fetch,
+        headers: { "User-Agent": "pulse-coach/1.0", "x-opencode-session": OPENCODE_SESSION },
+      })(model),
   },
   {
     id: "custom",

@@ -133,7 +133,7 @@
     "keyHintOptional": "Only if your server asks for one. Stored encrypted on this phone.",
     "keyHint": "Stored encrypted on this phone and never shown again.",
     "keyPlaceholder": "Paste your key",
-    "getKey": "Get a {{provider}} key",
+    "getKey": "Get your {{provider}} key",
     "modelLabel": "Model",
     "modelHint": "Any model your provider offers.",
     "testing": "Testing…",
