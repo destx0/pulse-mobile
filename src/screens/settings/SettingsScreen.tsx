@@ -15,10 +15,11 @@ import { DeleteEverything } from "./DeleteEverything";
 import { LiveHeartRate } from "./LiveHeartRate";
 import { NotificationsSection } from "./NotificationsSection";
 import { GoalsSettings } from "@/screens/goals/GoalsSettings";
+import { LeetCodeSection } from "./LeetCodeSection";
 import { ProfileCard } from "./ProfileCard";
 
-type SectionId = "profile" | "source" | "app" | "live" | "notifications" | "goals";
-const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "notifications", "goals"];
+type SectionId = "profile" | "source" | "app" | "live" | "notifications" | "goals" | "leetcode";
+const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "notifications", "goals", "leetcode"];
 /** Older names: ?s=sync, ?s=appearance, ?s=profile, and the web's ?s=account. */
 const ALIAS: Record<string, SectionId> = { sync: "source", appearance: "app", account: "profile" };
 
@@ -115,6 +116,8 @@ export function SettingsScreen() {
               <NotificationsSection />
             ) : section === "goals" ? (
               <GoalsSettings />
+            ) : section === "leetcode" ? (
+              <LeetCodeSection />
             ) : section === "source" ? (
               <DataSource now={now} />
             ) : section === "app" ? (

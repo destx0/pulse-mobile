@@ -126,3 +126,11 @@ Each phase lands on its own branch and goes through a PR. Each one ends with the
 
 - Package id: keep `in.portlabs.pulse`. Health Connect also needs a privacy-policy rationale activity, which the `react-native-health-connect` config plugin declares.
 - Source policy: halo defaults to `fitbit_only`. Pulse first kept it, then removed it (importer version 7): every app's records are kept and the largest source per day wins for measured totals.
+
+## Independent source: LeetCode
+
+LeetCode is not part of the health rewrite. It is a second source that reads a public profile's practice data
+(solved counts, streak, accepted submissions) through LeetCode's GraphQL endpoint and stores one snapshot
+per username on the phone. It never feeds Recovery, Strain, Sleep, Pulse Age, stress, Energy Bank, journal impact or a
+report, and it is not part of the health export. The counting rule, error states and sync are in
+[`docs/leetcode.md`](leetcode.md); the screen and its Home stat are in `docs/design/spec.md` §7.1 and §7.28.

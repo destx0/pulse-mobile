@@ -903,3 +903,20 @@ Each workout link starts a fresh Expo Router chat using `n`, carries the workout
 ## Sleep analysis uses the wake-up date
 
 Sleep Coach links carry the selected wake-up date in Expo Router params, then message metadata for saved follow-ups. The preview uses the existing sleep digest and a session-only cache keyed by night data, provider, model and instructions, including language and display units. Matching concurrent requests share one promise; failures are not cached. The shared activity Coach uses one automatic-analysis setting for every recorded workout type, main sleep and naps. Each link carries its activity kind and session ID or wake-up date; saved chats preserve that selection. Turning automatic analysis off keeps the Coach available on tap for every activity.
+
+## A second source: LeetCode's GraphQL API and local days
+
+LeetCode is read through its public GraphQL endpoint (`src/leetcode/api.ts`), not the website. The request sends the
+username in the query variables and nothing about the person; there is no password, cookie or token. The parser owns
+every failure: HTTP 429 is "rate limited", 403 is "blocked", 5xx is "LeetCode is having trouble", an abort is a
+timeout and any other rejection is offline. A malformed body is a `malformed` result too, never a crash and never a
+logged body. The caller keeps the last good snapshot on every failure (`src/leetcode/connection.ts`).
+
+LeetCode exposes accepted **submissions** in its recent list, but its 12-month calendar counts every submission,
+accepted or not, and has no problem identity. So the app dedupes by `titleSlug` wherever it counts problems and leaves
+the calendar as submissions. Its calendar buckets are UTC days; the recent accepted list has real timestamps, and
+`todayProblems` puts those on the profile's local day with `localDay(ts, timeZone)` from `src/lib/time.ts`. This is the
+same local-day rule as the health pipeline; do not compare a UTC date string to a local one.
+
+The public recent list is capped at 20 submissions. When all 20 are from today, the count is shown as `20+`: a lower
+bound is honest; inventing the rest is not.

@@ -376,7 +376,7 @@ Rem values assume 16 px root. "Caps" means the source string is sentence case an
 | Dial value, Home Recovery | Barlow | 30 / 30 (≥ 768: 36) | 700 | -0.01em | n/a | `font-numeric text-[30px] leading-none font-bold tabular-nums md:text-[36px]` |
 | Dial value, small | Barlow | 16 / 16 | 700 | 0 | n/a | `font-numeric text-base leading-none font-bold tabular-nums` |
 | Dial label | Figtree | 12 / 16 | 700 | 0.08em | caps | `text-xs leading-4 font-bold tracking-[0.08em] uppercase` |
-| Wordmark ("PULSE" above the Home dials) | Figtree | 13 / 16 | 600 | 0.35em | caps | `text-[13px] leading-4 font-semibold tracking-[0.35em] uppercase text-foreground-secondary` |
+| Wordmark ("PULSE" in the large dials and onboarding) | Figtree | 13 / 16 | 600 | 0.35em | caps | `text-[13px] leading-4 font-semibold tracking-[0.35em] uppercase text-foreground-secondary` |
 | Top-bar title | Figtree | 13 / 16 | 700 | 0.1em | caps | `text-[13px] leading-4 font-bold tracking-[0.1em] uppercase` |
 | Section title ("My Day") | Figtree | 22 / 28 (≥ 1280: 24 / 30) | 600 | -0.01em | sentence | `text-[22px] leading-7 font-semibold tracking-[-0.01em] text-balance xl:text-2xl` |
 | Card title | Figtree | 13 / 16 | 700 | 0.08em | caps | `text-[13px] leading-4 font-bold tracking-[0.08em] uppercase` |
@@ -548,7 +548,7 @@ Home's top of screen has two states: `top` at rest [latest-home-top-1], and `rin
 ┌──────────────────────────────────────────┐  ┌──────────────────────────────────────────┐
 │ (av) [(flame) 70]   ‹ [ TODAY ] ›     55% (⌚•)│  │ (av) [(flame) 70]   ‹ [ TODAY ] ›     55% (⌚•)│
 └──────────────────────────────────────────┘  │  ◯ SLEEP     ◯ RECOVERY     ◯ STRAIN     │ 40
-               P U L S E                      └───────────── 24 px fade ────────────────┘
+        (code) 3 SOLVED TODAY                 └───────────── 24 px fade ────────────────┘
      ◯ 96%       ◯ 53%       ◯ 12.1           (content scrolls under, fading in)
     SLEEP >    RECOVERY >   STRAIN >
 ```
@@ -1410,7 +1410,7 @@ Shell: `PageShell layout="home"` with `HomeHeader` (§4.3). References: [latest-
 |---|---|---|---|---|---|
 | 1 | Header | HomeHeader: avatar, streak, DateSwitcher, SyncStatus; ring row when collapsed | "Today", "{n}" streak, "12m" / "Demo" | streak hidden at 0 and on past days | §4.3 |
 | 2 | Connection | ConnectionBanner (card material) | §5.13 | hidden when connected or demo | v1 |
-| 3 | Wordmark and dials | wordmark "Pulse" (wordmark role) over three equal ScoreDial `md` links (Sleep, Recovery, Strain with target), labels with `ChevronRight` 12 | "Sleep", "Recovery", "Strain"; "So far" tag under Strain today | as v1 (track only, one ReasonPlaceholder line) | dials equal, wordmark centred [latest-home-top-1] |
+| 3 | Dials, with today's LeetCode stat above | When a LeetCode profile is connected and the day is today: a compact 28 px pill (Code glyph, distinct problems solved today, "Solved today") centred where the Pulse wordmark used to be; tapping opens `/leetcode`. A failed last refresh replaces it with "Sync failed". Hidden when LeetCode is not connected and on past days. Below it: three equal ScoreDial `md` links (Sleep, Recovery, Strain with target), labels with `ChevronRight` 12 | "Sleep", "Recovery", "Strain"; "So far" tag under Strain today; LeetCode "Solved today" / "Sync failed" | dials as v1 (track only, one ReasonPlaceholder line); the LeetCode pill has no placeholder while loading and no zero after a failure | dials equal [latest-home-top-1]; wordmark removed 2026-10-30 for the LeetCode stat |
 | 4 | Insight (today only) | InsightCard compact: title body-strong, 3 lines max, a "1"/check counter at the right in a `rounded-lg bg-white/8` 32 × 48 pill when there are several (swipe, **inferred** as tap to cycle) | U10's top insight, e.g. title "Reaching optimal strain", body "You're inside today's target of 12.6. More strain from here adds load faster than benefit." | hidden when none | "Reaching Optimal Strain" card [latest-home-top-1], "Heart Rate Zones Updated" [latest-home-top-3] |
 | 5 | Health Monitor alert | v1 `Alert` (card material, warning / red ring) | v1 copy | only when flagged | v1 |
 | 6 | Monitor row | two linked cards, `grid grid-cols-2 gap-3` | v1 copy (Health Monitor "Within range / 5/5 Metrics"; Stress Monitor value chip + level + time) | v1 + A1 | [latest-home-top-1], [latest-home-top-3] |
@@ -1431,7 +1431,7 @@ Phone, 390:
 ```
 ┌────────────────────────────────────────────┐
 │ (av)[(flame)70]     ‹ [ TODAY ] ›     12m (⌚•) │ header top row 44 + safe area
-│                  P U L S E                 │
+│            (code) 3 SOLVED TODAY           │ LeetCode stat, today + connected only
 │     ◯◯           ◯◯           ◯◯          │ three 96 dials, equal
 │    96%          53%          12.1          │
 │  SLEEP >     RECOVERY >     STRAIN >       │
@@ -1486,7 +1486,7 @@ Tablet, 820 (rail 88 + insets; 720 px column; dials 120 px):
 ```
 ╭──────╮┌──────────────────────────────────────────────────────────────┐
 │  P   ││ (av)[(flame)70]           ‹ [ TODAY ] ›                12m (⌚•) │
-│╭────╮││                         P U L S E                            │
+│╭────╮││                    [ (code) 3 SOLVED TODAY ]                 │
 ││Home│││        ◯ 96%             ◯ 53%              ◯ 12.1           │
 │╰────╯││       SLEEP >          RECOVERY >          STRAIN >          │
 │Health││  [insight .................................................] │
@@ -1502,7 +1502,7 @@ Laptop, 1440 (sidebar 232 + insets; content 1120; grid 5fr / 7fr), **inferred**:
 ```
 ╭────────────────╮ ┌──────────────────────────────────────────────────────────────────────────────┐
 │ PULSE          │ │ (av)[(flame)70]                     ‹ [ TODAY ] ›                       12m (⌚•) │
-│╭──────────────╮│ │            P U L S E               ┌──────────────────┐┌──────────────────┐ │
+│╭──────────────╮│ │         [ (code) 3 SOLVED TODAY ]           ┌──────────────────┐┌──────────────────┐ │
 ││(h) Home      ││ │  ◯ 96%     ◯ 53%     ◯ 12.1        │HEALTH MONITOR   >││STRESS MONITOR   >│ │ top
 │╰──────────────╯│ │ SLEEP >  RECOVERY >  STRAIN >      └──────────────────┘└──────────────────┘ │
 │ (+) Health     │ │  [insight, full width ....................................................] │
@@ -2506,7 +2506,7 @@ Laptop, 1440:
 
 ### 7.14 More `/more` and Settings `/settings`
 
-**Settings layout (2026-10-06).** Settings shows one section at a time: Account (account, profile, and Delete account at its foot), Data source, App (Appearance, install, notifications) and, with coach access, Coach. From 1280 px the sections are a glass panel (`SettingsLayout.tsx`) beside the app's 88 px rail, as the coach's chats panel is: 272 px expanded, a 64 px icon rail collapsed, remembered per device (`panelStore`). `AppNav` keeps the rail only on `/coach` and `/settings`, and there the rail carries its own Settings item (lit on Settings) under a hairline, since the full sidebar that normally lists it is hidden. Below 1280 px Settings has no second level: **More** opens with a group "Account & settings" (Account, Data source, App, and Coach with access; icon and caps label only, no subtext), one 56 px row each, linking to `/settings?s=account`, `source`, `app`, `coach`; the page shows that section alone and its back button returns to More. `?s=` names the section and the server reads it, so the first paint is the right section (a hash was set only after a client navigation mounted the page, so every row opened Account); `sync`, `appearance` and `profile` still resolve to Data source, App and Account, and with none it shows the first section. The coach's icon is `BotMessageSquare`.
+**Settings layout (2026-10-06).** Settings shows one section at a time: Account (account, profile, and Delete account at its foot), Data source, App (Appearance, install, notifications) and, with coach access, Coach. From 1280 px the sections are a glass panel (`SettingsLayout.tsx`) beside the app's 88 px rail, as the coach's chats panel is: 272 px expanded, a 64 px icon rail collapsed, remembered per device (`panelStore`). `AppNav` keeps the rail only on `/coach` and `/settings`, and there the rail carries its own Settings item (lit on Settings) under a hairline, since the full sidebar that normally lists it is hidden. Below 1280 px Settings has no second level: **More** opens with a group "Account & settings" (Account, Data source, LeetCode, App, and Coach with access; icon and caps label only, no subtext), one 56 px row each, linking to `/settings?s=account`, `source`, `leetcode`, `app`, `coach`; the page shows that section alone and its back button returns to More. `?s=` names the section and the server reads it, so the first paint is the right section (a hash was set only after a client navigation mounted the page, so every row opened Account); `sync`, `appearance` and `profile` still resolve to Data source, App and Account, and with none it shows the first section. The coach's icon is `BotMessageSquare`; LeetCode uses `Code2`.
 
 **U21 (2026-10-03) supersedes the More and Settings tables below; see §11 H1-H12.** More is the hub for everything that isn't configuration. Phone, top to bottom: the group "Account & settings" (below 1280 px: Account, Data source, App, Coach → `/settings?s=…`), then row groups "Reports" (Weekly report, Monthly report, All reports → `/reports`), "Trends" (→ `/trends`), "Journal" (Behaviours, caption "{shown} of {total} shown" → `/more/behaviours`), "Help" (How Pulse works → `/more/how-it-works`), "Your data" (Export and backup → `/more/data`), then the About card (moved from Settings: the user's copy "Scoring is ported from noop. Pulse is for personal use and is not a medical device.", Version, Scoring version, buttons "Source code" and "Report a bug" to the GitHub repo and its issues). From 1280 px the groups pair up in two columns (`LIST_GRID`). Settings keeps Account, Data source and Profile only.
 
@@ -2525,6 +2525,7 @@ Laptop, 1440:
 | Section (SectionShell `card`, with `id` for deep links) | Content | Copy |
 |---|---|---|
 | "Data source" `#source` | row "Source" with value "Demo data" or "Google Health"; status tag; description; actions | Demo: tag "Demo", body "Demo mode generates 180 days of realistic data so every screen can be explored. Set DATA_SOURCE=google on the server to use your Fitbit data." (no actions). Google not connected: tag "Not connected", body "Connect the Google account your Fitbit Air syncs to. Pulse only reads data.", `Button size="touch"` default "Connect Google" → `/oauth/start`. Connected: tag "Connected", body "Connected as {email}." (if the query exposes it) and buttons "Reconnect" (secondary) and "Disconnect" (outline, red text). Revoked: tag "Reconnect needed", body "Google access was revoked or expired. Sync is paused.", button default "Reconnect Google". Mobile: there is no "Use data from" setting; Pulse reads every app's records from Health Connect (sources are picked in Health Connect's own settings) and takes the largest source per day for measured totals |
+| "LeetCode" `#leetcode` | Connected: username, last sync, Sync now, Open LeetCode (`/leetcode`), Disconnect (outline, red text, confirm). Not connected: username field and Connect. A failed connect shows the server's honest reason under the field | "Your public LeetCode profile. Pulse reads problems solved, your streak and recent accepted problems. It never asks for a password or token, and it never changes a health score." Disconnect: "Pulse deletes this profile's stored LeetCode data from the phone. Your health data stays." See `docs/leetcode.md` |
 | "Sync status" `#sync` | importing: `Progress` + "Importing history… 42 of 180 days"; then rows per data type: label (body role) left; right: relative time (caption, `font-numeric`) + status icon (`Check` optimal, `TriangleAlert` warning for stale > 2 h, `CircleAlert` red with the error code as caption, e.g. "HTTP 429") | types: "Heart rate", "Steps", "Sleep", "Heart rate variability", "Resting heart rate", "Respiratory rate", "Skin temperature", "Blood oxygen", "Exercise", "VO2 max", "Calories", "Weight and body fat". Demo: one row "Demo generator" "Updated 3 min ago" |
 | "Profile" | read-only rows (label stat-label, value body right) | "Birth date" ("Jan 1, 1990": `Intl.DateTimeFormat`, month short, day, year), "Age", "Sex", "Max heart rate" ("186 bpm, estimated" or "190 bpm, set"), "Time zone" ("Asia/Kolkata"); caption "Set in the server environment. Change it there and restart." |
 | "About" | body text | "Scoring is ported from noop (PolyForm Noncommercial 1.0.0). Google Health ingestion follows Hælan (AGPL-3.0). The interface is modelled on the reference app and another app for personal use. Pulse is not a medical device." Then rows "Version 0.1.0", "Scoring version {n}" |
@@ -2681,6 +2682,24 @@ No PWA design; halo's phone additions on our kit. Targets live on the phone (Asy
 
 The report header's right action is a ghost `Share2` button: the report as plain text (period, averages against the period before, sleep, activity, biggest changes, focus) through the system share sheet.
 
+### 7.28 LeetCode `/leetcode`
+
+A second source's screen, reached from Home's today stat and Settings › LeetCode. It is not a health screen: no
+score, report, export or Health Connect record reads it. Shell: `DetailShell title="LeetCode"` (parent `/more`), pull
+to refresh. Data comes from the stored snapshot (`docs/leetcode.md`), so it opens without a network call.
+
+| Section | Component | Copy / state |
+|---|---|---|
+| Profile | `Card`: 56 px avatar (or `Code2`), username, display name, profile rank right; three `MiniStat` tiles: Day streak, Active days, Solved today (distinct problems; `20+` when LeetCode's 20-submission window may have cut today short) | "LeetCode profile" when no display name; rank shown only when LeetCode publishes one |
+| Solved | `SectionShell` card "Solved", aside "{n} total"; Easy / Medium / Hard rows with counts and a bar | LeetCode's own problem counts, never submission counts |
+| Activity | `SectionShell` card "Activity", aside "12 months": a contribution grid (weeks as columns, weekdays as rows, month marks above), the year's submission total, and a Less / More legend | Total line "{{n}} submissions in the last 12 months"; note "LeetCode's calendar counts submissions, not problems: a problem accepted twice counts twice here, and a wrong attempt counts too. This view is never problems solved." Never labelled problems solved |
+| Recent problems | `SectionShell` card "Recent problems", aside "Latest {n}": up to 12 distinct problems, newest first, with an accepted check and the local date | "No accepted problems yet." when none |
+| Actions | Last sync caption; Refresh and Disconnect buttons; "Manage in Settings" | Disconnect asks first and deletes this username's stored data |
+
+States: not connected → card with "Connect LeetCode" → `/settings?s=leetcode`; connected without a snapshot → the
+failure and Refresh; a refresh failure with a snapshot → a warning card "Last refresh failed. Showing the data from
+{ago}." above the last good data. Home shows "Sync failed" in the stat slot whenever the last refresh failed.
+
 ---
 
 ## 8. Journeys
@@ -2702,6 +2721,9 @@ flowchart LR
   J["/journal ?d="] --> JI["/journal/insights"]
   MO["/more"] --> SE["/settings"]
   MO --> RP
+  MO --> LC["/leetcode"]
+  H -->|LeetCode today stat| LC
+  LC --> SE2["/settings?s=leetcode"]
 ```
 
 1. **Morning check.** Open `/` → header pill "Today", dials animate once; scroll down and the mini rings appear in the header. Tap the Recovery dial → `/recovery` (no `d`). Read the contributors, then "See what shaped it" scrolls to the drivers card. Back → `/`, scroll position restored by Next (the header state is recomputed from the restored position).
@@ -2965,7 +2987,7 @@ Rows overridden by v2: **D2** (TopBar part only, V3), **B1** (V10), **CAL6** (of
 
 | # | Spec says | Build does | Why |
 |---|---|---|---|
-| F1 | §7.1: Home's top slot `pt-4`; the header sentinel one `space-y-4` step under the dial labels | Below 768 px the slot starts right under the header's fade (`-mt-2` cancels the column's 8 px), wordmark and dials are `space-y-3` apart, and the sentinel sits on the labels' bottom (`-mt-3`), so the card below starts 24 px under the labels | The reference app: wordmark centre 52 pt under the pill, dial centre 74 pt under the wordmark, labels to the first card about 34 pt [latest-home-top-2], [latest-home-top-3]. Pulse sat 26 pt, 4 pt and 16 pt lower |
+| F1 | §7.1: Home's top slot `pt-4`; the header sentinel one `space-y-4` step under the dial labels | Below 768 px the slot starts right under the header's fade (`-mt-2` cancels the column's 8 px), the LeetCode stat (when connected, today) and dials are `space-y-3` apart, and the sentinel sits on the labels' bottom (`-mt-3`), so the card below starts 24 px under the labels; with no LeetCode profile the dials start under the header | The reference app: wordmark centre 52 pt under the pill, dial centre 74 pt under the wordmark, labels to the first card about 34 pt [latest-home-top-2], [latest-home-top-3]. Pulse replaced that wordmark with the LeetCode stat on 2026-10-30 |
 | F2 | §5.1 `md`: 96 px box, 92 px ring | 92 px box (`size-23`), an 88 px ring 6 px thick; tablet keeps `md:size-30` | The reference app's three dials measure 86-88 pt across with a 6 pt ring at 390-393 pt [latest-home-top-2], [latest-home-top-3] |
 | F3 | §5.1: `md` dial to label gap 8 px | 4 px (`gap-1`) | Ring bottom to label centre 14-15 pt in the reference app, 17 in Pulse |
 | F4 | §4.3.1: pill label 13 px, pill `h-8 p-0.5` | 11 px label, `h-[30px] p-px` pill (Reports' period pill follows) | "TODAY" is 39 pt wide with a 7.3 pt cap height, the pill about 29 pt tall [latest-home-top-2], [latest-home-sticky-header-user-2025] |

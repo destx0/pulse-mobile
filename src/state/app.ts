@@ -23,6 +23,7 @@ import { setLocale } from "@/lib/locale";
 import { seedDemoFood } from "@/data/seedFood";
 import { forgetChanges } from "@/health/sync";
 import { localDay } from "@/lib/time";
+import { initLeetCode, leetcodeForeground, resetLeetCode } from "./leetcode";
 import type { DisplayPrefs } from "@/lib/units";
 import type { QueryCtx } from "@/queries/ctx";
 import { ensureDefaultTags } from "@/queries/journal";
@@ -202,6 +203,8 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
     if (theme) applyTheme(theme);
     patch({ theme: theme === "light" || theme === "dark" ? theme : "system" });
     patch({ store: st, profile, source, sync, availability: avail });
+    // LeetCode is independent of the health source: open its last snapshot (if any) while the health import starts.
+    void initLeetCode(st);
     watchForeground();
     void checkForUpdate();
     if (!profile) return patch({ status: "needs_profile" });
@@ -229,6 +232,8 @@ function watchForeground() {
     const away = backgroundAt === null ? 0 : Date.now() - backgroundAt;
     backgroundAt = null;
     if (away > RESYNC_AWAY_MS && state.onboarded) void run();
+    // LeetCode is throttled separately (10 minutes): a connected profile catches up when the app comes back.
+    leetcodeForeground();
     // Android lets the person change Pulse's language in the system settings while it runs: "Phone's language" follows it.
     void followPhoneLanguage();
     // At most once a day (src/state/update.ts): a phone left open for days still hears of a release.
@@ -367,6 +372,7 @@ export async function reset(): Promise<void> {
   const { store } = state;
   if (running) await running.catch(() => {});
   if (store) await store.clearAll();
+  await resetLeetCode();
   deleteAllPhotos();
   await AsyncStorage.multiRemove([SOURCE_KEY, OWN_PROFILE_KEY]).catch(() => {});
   await forgetChanges();

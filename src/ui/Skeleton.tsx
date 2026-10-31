@@ -15,7 +15,8 @@ const PULSE = {
   animationDuration: "2s",
   animationIterationCount: "infinite" as const,
   animationTimingFunction: "ease-in-out",
-};
+  // RN 0.86's CSS style types do not model a keyframe object here; the runtime (css-interop) does.
+} as never;
 
 function Bar({ className, style, ...props }: ViewProps) {
   const still = useReducedMotion();

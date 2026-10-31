@@ -148,6 +148,7 @@ import plNotifications from "./locales/pl/notifications.json";
 import plErrors from "./locales/pl/errors.json";
 import plUi from "./locales/pl/ui.json";
 import enCoachTools from "./locales/en/coachTools.json";
+import enLeetcode from "./locales/en/leetcode.json";
 import deCoachTools from "./locales/de/coachTools.json";
 import frCoachTools from "./locales/fr/coachTools.json";
 import esCoachTools from "./locales/es/coachTools.json";
@@ -178,7 +179,7 @@ import itUi from "./locales/it/ui.json";
 import itCoachTools from "./locales/it/coachTools.json";
 
 export const resources = {
-  "en": { common: enCommon, reasons: enReasons, metrics: enMetrics, home: enHome, sleep: enSleep, recovery: enRecovery, strain: enStrain, health: enHealth, journal: enJournal, trends: enTrends, nutrition: enNutrition, goals: enGoals, reports: enReports, coach: enCoach, settings: enSettings, onboarding: enOnboarding, more: enMore, howItWorks: enHowItWorks, notifications: enNotifications, errors: enErrors, ui: enUi, coachTools: enCoachTools },
+  "en": { common: enCommon, reasons: enReasons, metrics: enMetrics, home: enHome, sleep: enSleep, recovery: enRecovery, strain: enStrain, health: enHealth, journal: enJournal, trends: enTrends, nutrition: enNutrition, goals: enGoals, reports: enReports, coach: enCoach, settings: enSettings, onboarding: enOnboarding, more: enMore, howItWorks: enHowItWorks, notifications: enNotifications, errors: enErrors, ui: enUi, coachTools: enCoachTools, leetcode: enLeetcode },
   "de": { common: deCommon, reasons: deReasons, metrics: deMetrics, home: deHome, sleep: deSleep, recovery: deRecovery, strain: deStrain, health: deHealth, journal: deJournal, trends: deTrends, nutrition: deNutrition, goals: deGoals, reports: deReports, coach: deCoach, settings: deSettings, onboarding: deOnboarding, more: deMore, howItWorks: deHowItWorks, notifications: deNotifications, errors: deErrors, ui: deUi, coachTools: deCoachTools },
   "fr": { common: frCommon, reasons: frReasons, metrics: frMetrics, home: frHome, sleep: frSleep, recovery: frRecovery, strain: frStrain, health: frHealth, journal: frJournal, trends: frTrends, nutrition: frNutrition, goals: frGoals, reports: frReports, coach: frCoach, settings: frSettings, onboarding: frOnboarding, more: frMore, howItWorks: frHowItWorks, notifications: frNotifications, errors: frErrors, ui: frUi, coachTools: frCoachTools },
   "es": { common: esCommon, reasons: esReasons, metrics: esMetrics, home: esHome, sleep: esSleep, recovery: esRecovery, strain: esStrain, health: esHealth, journal: esJournal, trends: esTrends, nutrition: esNutrition, goals: esGoals, reports: esReports, coach: esCoach, settings: esSettings, onboarding: esOnboarding, more: esMore, howItWorks: esHowItWorks, notifications: esNotifications, errors: esErrors, ui: esUi, coachTools: esCoachTools },

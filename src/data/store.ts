@@ -1,6 +1,7 @@
 // The storage contract every layer talks to: the importer writes rows, the pipeline reads rows and writes scores,
 // the screen queries read both. One implementation on expo-sqlite (db.ts); tests may use an in-memory one.
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
+import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { Stage1Activity, Stage1Day, Stage2Row } from "@/pipeline/types";
 import type { Report } from "@/core/algorithms/reports";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
@@ -124,7 +125,17 @@ export interface Store {
   /** Deletes one chat, or every chat without an id. */
   deleteCoachChats(id?: string): Promise<void>;
 
-  /** Drops every row (settings › disconnect, or switching demo ↔ Health Connect). */
+  // LeetCode (a second, independent source: public profile data only, never a health input). One stored snapshot per
+  // username; screens read it without a network call. clearAll leaves it, as source switches (demo ↔ Health Connect)
+  // are not LeetCode disconnects; reset removes it through clearLeetCode.
+  getLeetCode(username: string): Promise<LeetCodeSnapshot | null>;
+  putLeetCode(snapshot: LeetCodeSnapshot): Promise<void>;
+  /** Removes one username's snapshot (Settings › Disconnect). */
+  deleteLeetCode(username: string): Promise<void>;
+  /** Removes every stored LeetCode snapshot (Delete everything). */
+  clearLeetCode(): Promise<void>;
+
+  /** Drops every health row (settings › disconnect, or switching demo ↔ Health Connect). LeetCode snapshots stay; reset clears them through clearLeetCode. */
   clearAll(): Promise<void>;
 
   // Upkeep (src/background/maintenance.ts)

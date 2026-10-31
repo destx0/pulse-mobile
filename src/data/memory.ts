@@ -3,6 +3,7 @@
 // store, as they would not with SQLite.
 import type { DayRange, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
+import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
 import { minuteHr } from "@/core/engine/context";
 
@@ -321,6 +322,7 @@ export class MemoryStore implements Store {
   }
 
   private chats = new Map<string, { title: string; messages: unknown[]; updatedAt: number }>();
+  private leetcode = new Map<string, LeetCodeSnapshot>();
   async coachChats(limit: number, before?: { updatedAt: number; id: string }) {
     const after = (c: { id: string; updatedAt: number }) => !before || c.updatedAt < before.updatedAt || (c.updatedAt === before.updatedAt && c.id < before.id);
     return [...this.chats]
@@ -342,6 +344,20 @@ export class MemoryStore implements Store {
   async deleteCoachChats(id?: string) {
     if (id === undefined) this.chats.clear();
     else this.chats.delete(id);
+  }
+
+  async getLeetCode(username: string) {
+    const s = this.leetcode.get(username);
+    return s ? copy(s) : null;
+  }
+  async putLeetCode(snapshot: LeetCodeSnapshot) {
+    this.leetcode.set(snapshot.username, copy(snapshot));
+  }
+  async deleteLeetCode(username: string) {
+    this.leetcode.delete(username);
+  }
+  async clearLeetCode() {
+    this.leetcode.clear();
   }
 
   async compactHr(beforeTs: number) {

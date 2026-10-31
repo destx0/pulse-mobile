@@ -4,7 +4,6 @@ import { Fragment } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { DASHBOARD_DEFAULT, DASHBOARD_LABEL, type DashboardKey } from "@/lib/dashboard";
-import { Wordmark } from "@/ui/brand";
 import { CARD_CLASS, CardFill, useCardStyle } from "@/ui/Card";
 import { EnergyBankChartSkeleton } from "@/ui/charts/EnergyBankChart";
 import { TimelineSkeleton } from "@/ui/metrics/ActivityCard";
@@ -70,9 +69,6 @@ export function HomeSkeleton({ stats = DASHBOARD_DEFAULT }: { stats?: DashboardK
         top: (
           <View accessibilityState={{ busy: true }} className="-mt-2">
             <View className="gap-3">
-              <View accessibilityElementsHidden className="items-center">
-                <Wordmark height={17} tone="foreground-secondary" />
-              </View>
               <View className="flex-row items-start justify-around">
                 {(["sleep", "recovery", "strain"] as const).map((v) => (
                   <View key={v} className="flex-1 items-center">

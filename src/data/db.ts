@@ -6,6 +6,7 @@ import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "exp
 import { isDeadConnection } from "./deadConnection";
 import type { CoachChatRow, DayRange, EntrySource, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
+import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
 import { minuteHr } from "@/core/engine/context";
 import { slice } from "@/lib/yield";
@@ -63,6 +64,7 @@ create table if not exists health_records (id text primary key, kind text not nu
 create index if not exists health_records_day on health_records (day);
 create table if not exists coach_chats (id text primary key, title text not null, messages text not null, created_at integer not null, updated_at integer not null);
 create index if not exists coach_chats_recent on coach_chats (updated_at desc, id desc);
+create table if not exists leetcode_profiles (username text primary key, data text not null);
 `;
 
 /** Columns added after a release: each `alter` fails harmlessly on a database that already has it. */
@@ -757,6 +759,32 @@ class SqliteStore implements Store {
   async deleteCoachChats(id?: string) {
     if (id === undefined) await this.db.runAsync("delete from coach_chats");
     else await this.db.runAsync("delete from coach_chats where id = ?", [id]);
+  }
+
+  // ── LeetCode ──────────────────────────────────────────────────────────────
+
+  async getLeetCode(username: string) {
+    const r = await this.db.getFirstAsync<{ data: string }>("select data from leetcode_profiles where username = ?", [username]);
+    if (!r) return null;
+    try {
+      return JSON.parse(r.data) as LeetCodeSnapshot;
+    } catch {
+      return null;
+    }
+  }
+  async putLeetCode(snapshot: LeetCodeSnapshot) {
+    await this.tx((db) =>
+      db.runAsync("insert into leetcode_profiles (username, data) values (?, ?) on conflict(username) do update set data = excluded.data", [
+        snapshot.username,
+        JSON.stringify(snapshot),
+      ]),
+    );
+  }
+  async deleteLeetCode(username: string) {
+    await this.db.runAsync("delete from leetcode_profiles where username = ?", [username]);
+  }
+  async clearLeetCode() {
+    await this.db.runAsync("delete from leetcode_profiles");
   }
 
   async clearAll() {
