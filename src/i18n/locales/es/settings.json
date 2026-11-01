@@ -130,7 +130,7 @@
     "notConnected": "No conectado",
     "sampleLine": "180 días de una persona de prueba",
     "sampleBody": "Cada pantalla usa datos generados. Conecta Health Connect para puntuar tus propios datos de Fitbit.",
-    "notConnectedBody": "Conecta Health Connect, donde la app Google Health escribe tus datos de Fitbit. Pulse solo los lee; nada sale de tu teléfono.",
+    "notConnectedBody": "Conecta Health Connect, donde la app Google Health escribe tus datos de Fitbit. Pulse los lee y solo escribe tus pesadas de la báscula (peso y grasa corporal); nada sale de tu teléfono.",
     "revokedLine": "Acceso revocado",
     "revokedBody": "Se quitó el acceso a Health Connect. La sincronización está en pausa hasta que lo permitas de nuevo.",
     "syncedAgo": "Sincronizado {{ago}}",

@@ -113,5 +113,18 @@
     "noScaleFound": "Весы не найдены. Убедитесь, что они включены и рядом.",
     "btUnavailable": "Bluetooth недоступен в этой сборке.",
     "saveFailed": "Не удалось сохранить это взвешивание."
+  },
+  "health": {
+    "title": "Health Connect",
+    "checking": "Проверка Health Connect…",
+    "ready": "Вес и процент жира добавляются в Health Connect. Google Fit и другие приложения здоровья могут их читать.",
+    "saved": "Добавлено в Health Connect.",
+    "permission": "Сохранено в Pulse. Разрешите запись в Health Connect, чтобы Google Fit и другие приложения видели взвешивание.",
+    "unavailable": "Health Connect недоступен на этом телефоне.",
+    "failed": "Сохранено в Pulse. Не удалось записать в Health Connect.",
+    "pending": "Ожидают Health Connect: {{count}}",
+    "allow": "Разрешить запись в Health Connect",
+    "retry": "Повторить Health Connect",
+    "note": "Pulse записывает только вес и процент жира с весов с пометкой Pulse. Аккаунт Google не используется."
   }
 }

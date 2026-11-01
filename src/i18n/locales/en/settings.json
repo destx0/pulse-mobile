@@ -129,7 +129,7 @@
     "notConnected": "Not connected",
     "sampleLine": "180 days of a demo person",
     "sampleBody": "Every screen runs on generated data. Connect Health Connect to score your own Fitbit data.",
-    "notConnectedBody": "Connect Health Connect, where the Google Health app writes your Fitbit data. Pulse only reads it; nothing leaves your phone.",
+    "notConnectedBody": "Connect Health Connect, where the Google Health app writes your Fitbit data. Pulse reads it and writes only your scale weigh-ins (weight and body fat); nothing leaves your phone.",
     "revokedLine": "Access revoked",
     "revokedBody": "Health Connect access was removed. Sync is paused until you allow it again.",
     "syncedAgo": "Synced {{ago}}",

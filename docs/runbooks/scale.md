@@ -1,7 +1,9 @@
 # HealthSense BS191 scale (LeFu V3)
 
-The scale is local-only: Pulse connects over Bluetooth, reads the weigh-in, and writes weight and body fat to
-`logged_entries` (source `pulse`) through `logEntry`. Nothing goes to Health Connect, Google or a server.
+The scale connects over Bluetooth. Pulse keeps the weigh-in in `logged_entries` (source `pulse`) through `logEntry`
+and writes the same weight and body fat to on-device **Health Connect** as Pulse-tagged records. Google Fit and other
+apps with Health Connect access can then read them. There is no Google account and no server; Health Connect is the
+only place the weigh-in leaves the app.
 
 ## Before testing
 
@@ -37,6 +39,10 @@ The scale is local-only: Pulse connects over Bluetooth, reads the weigh-in, and 
   says so.
 - **History**: weigh in while Pulse is closed, then open the scale. The stored frame is saved at its timestamp; the
   History card counts received/saved. `F2 01` clears the scale only after the end marker.
+- **Health Connect**: on the first Save, allow the write permission. Open Health Connect (or Google Fit with Health
+  Connect access) and check that Weight and Body Fat exist with Pulse as the source and the weigh-in's time. A socks
+  weigh-in writes Weight only. History backfills write at the scale's timestamps. Deny the permission once and check
+  that the weigh-in is still saved locally and the Scale screen offers **Allow Health Connect writes**.
 - **Reconnect**: leave and reopen the screen, or tap Connect on the remembered row. A dropped link goes back to Not
   connected with the reason; it never reconnects on its own.
 - **Heart rate**: open Settings › Live heart rate and make sure the band still scans, connects and shows bpm. The scale
@@ -60,6 +66,9 @@ adb logcat -s ReactNativeJS | grep -E 'PulseScale|\[scale\]'
 - `clock ack` absent: expected on some units; Pulse does not wait for it.
 - `connect failed` / `notAScale`: the device did not expose `FFF0/FFF1/FFF4`, or Android refused the link. Check the
   Nearby devices permission and that the scale is awake.
+- `Health Connect write failed`: check that Health Connect is installed/enabled and that Pulse has the Weight and Body
+  Fat **write** permissions (the Scale screen's **Allow Health Connect writes**). **Retry Health Connect** re-runs the
+  waiting records; a deterministic client record id keeps retries from duplicating them.
 - A wrong weight unit: Pulse always sends unit `00` (kg), so the scale should report kg. If a unit byte other than 0
   arrives, the frame is converted to kg before saving.
 

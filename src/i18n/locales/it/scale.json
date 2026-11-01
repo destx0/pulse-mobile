@@ -113,5 +113,18 @@
     "noScaleFound": "Nessuna bilancia trovata. Controlla che sia accesa e vicina.",
     "btUnavailable": "Il Bluetooth non è disponibile in questa versione.",
     "saveFailed": "Impossibile salvare questa pesata."
+  },
+  "health": {
+    "title": "Health Connect",
+    "checking": "Verifica di Health Connect…",
+    "ready": "Peso e grasso corporeo vengono aggiunti a Health Connect. Google Fit e altre app per la salute possono leggerli.",
+    "saved": "Aggiunto a Health Connect.",
+    "permission": "Salvato in Pulse. Consenti la scrittura in Health Connect così Google Fit e altre app vedono la pesata.",
+    "unavailable": "Health Connect non è disponibile su questo telefono.",
+    "failed": "Salvato in Pulse. La scrittura in Health Connect non è riuscita.",
+    "pending": "In attesa di Health Connect: {{count}}",
+    "allow": "Consenti scrittura in Health Connect",
+    "retry": "Riprova Health Connect",
+    "note": "Pulse scrive solo peso e grasso corporeo della bilancia, contrassegnati come Pulse. Nessun account Google viene usato."
   }
 }

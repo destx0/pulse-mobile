@@ -113,5 +113,18 @@
     "noScaleFound": "No scale found. Make sure it is awake and nearby.",
     "btUnavailable": "Bluetooth is not available in this build.",
     "saveFailed": "Could not save this weigh-in."
+  },
+  "health": {
+    "title": "Health Connect",
+    "checking": "Checking Health Connect…",
+    "ready": "Weight and body fat are added to Health Connect. Google Fit and other health apps can read them.",
+    "saved": "Added to Health Connect.",
+    "permission": "Saved in Pulse. Allow Health Connect writes so Google Fit and other apps can see the weigh-in.",
+    "unavailable": "Health Connect is not available on this phone.",
+    "failed": "Saved in Pulse. The Health Connect write failed.",
+    "pending": "Waiting for Health Connect: {{count}}",
+    "allow": "Allow Health Connect writes",
+    "retry": "Retry Health Connect",
+    "note": "Pulse writes only the scale's weight and body fat, tagged as Pulse. No Google account is used."
   }
 }

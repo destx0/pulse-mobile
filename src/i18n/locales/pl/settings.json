@@ -131,7 +131,7 @@
     "notConnected": "Niepołączone",
     "sampleLine": "180 dni przykładowej osoby",
     "sampleBody": "Każdy ekran działa na wygenerowanych danych. Połącz Health Connect, aby ocenić własne dane z Fitbit.",
-    "notConnectedBody": "Połącz Health Connect, gdzie aplikacja Google Health zapisuje Twoje dane z Fitbit. Pulse tylko je czyta; nic nie opuszcza Twojego telefonu.",
+    "notConnectedBody": "Połącz Health Connect, gdzie aplikacja Google Health zapisuje Twoje dane z Fitbit. Pulse je czyta i zapisuje tylko ważenia z wagi (wagę i tłuszcz); nic nie opuszcza Twojego telefonu.",
     "revokedLine": "Dostęp cofnięty",
     "revokedBody": "Dostęp do Health Connect został usunięty. Synchronizacja jest wstrzymana, dopóki znów go nie zezwolisz.",
     "syncedAgo": "Zsynchronizowano {{ago}}",

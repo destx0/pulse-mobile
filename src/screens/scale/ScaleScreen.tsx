@@ -340,6 +340,64 @@ function ReadingCard({ s }: { s: Scale }) {
 
 // ── History and profile ─────────────────────────────────────────────────────
 
+function HealthCard({ s }: { s: Scale }) {
+  const { t } = useTranslation("scale");
+  const [busy, setBusy] = useState(false);
+  const good = s.health === "ready" || s.health === "saved";
+  const warning = s.health === "permission" || s.health === "failed";
+  const message = t(
+    s.health === "ready"
+      ? "health.ready"
+      : s.health === "saved"
+        ? "health.saved"
+        : s.health === "permission"
+          ? "health.permission"
+          : s.health === "unavailable"
+            ? "health.unavailable"
+            : s.health === "failed"
+              ? "health.failed"
+              : "health.checking",
+  );
+  return (
+    <SectionShell variant="card" title={t("health.title")}>
+      <View className="flex-row gap-2.5">
+        <View className="mt-0.5">
+          <Icon icon={good ? ShieldCheck : warning ? TriangleAlert : Info} size={17} tone={good ? "optimal-text" : warning ? "warning-text" : "muted-foreground"} strokeWidth={2} />
+        </View>
+        <Text className={cn(BODY, "flex-1 text-foreground-secondary")}>{message}</Text>
+      </View>
+      {s.healthPending > 0 && <Text className={cn(HINT, "mt-2")}>{t("health.pending", { count: s.healthPending })}</Text>}
+      {s.health === "permission" && (
+        <Button
+          className="mt-4"
+          disabled={busy}
+          onPress={async () => {
+            setBusy(true);
+            await s.allowHealthWrite();
+            setBusy(false);
+          }}
+        >
+          {t("health.allow")}
+        </Button>
+      )}
+      {s.health === "failed" && (
+        <Button
+          className="mt-4"
+          disabled={busy}
+          onPress={async () => {
+            setBusy(true);
+            await s.retryHealthWrite();
+            setBusy(false);
+          }}
+        >
+          {t("health.retry")}
+        </Button>
+      )}
+      <Text className={cn(HINT, "mt-2")}>{t("health.note")}</Text>
+    </SectionShell>
+  );
+}
+
 function HistoryCard({ s }: { s: Scale }) {
   const { t } = useTranslation("scale");
   const h = s.history;
@@ -390,6 +448,7 @@ export function ScaleScreen() {
           {scale.permission !== "granted" || scale.radio !== "on" ? <PermissionsCard s={scale} /> : null}
           <ConnectionCard s={scale} />
           <ReadingCard s={scale} />
+          <HealthCard s={scale} />
           <HistoryCard s={scale} />
           <ProfileCard s={scale} />
           <View className="flex-row gap-2.5 px-1">

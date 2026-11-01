@@ -22,6 +22,9 @@ import {
   type LeFuFrame,
   type LeFuProfile,
 } from "@/health/lefu";
+import { availability, askWritePermissions, writePermissionState } from "@/health/connect";
+import { scaleClientRecordId, type ScaleWeighIn } from "@/health/healthRecord";
+import { writeScaleWeighIn } from "@/health/healthWrite";
 import {
   leFuScale,
   type LeFuReading,
@@ -36,6 +39,9 @@ export const LE_FU_ATHLETE_KEY = "pulse.lefu.athlete";
 export type { FoundScale, LeFuReading, LeFuSnapshot, RememberedScale } from "@/health/lefuBle";
 
 export type ScaleSave = "idle" | "saving" | "saved" | "failed";
+
+/** The last Health Connect write state for the scale's weigh-ins. */
+export type HealthSync = "unknown" | "ready" | "saved" | "permission" | "unavailable" | "failed";
 
 /** The last stored-history transfer, or null before one. */
 export type ScaleHistory = { received: number; saved: number; skipped: number; failed: number };
@@ -55,6 +61,10 @@ export type ScaleData = {
   /** The last history transfer's counts. */
   history: ScaleHistory | null;
   athlete: boolean;
+  /** Whether the scale's saved weigh-ins reach Health Connect. */
+  health: HealthSync;
+  /** Weigh-ins waiting for a Health Connect write (permission missing, unavailable, or a failed write). */
+  healthPending: number;
 };
 
 export type ScaleControl = LeFuSnapshot & {
@@ -73,6 +83,10 @@ export type ScaleControl = LeFuSnapshot & {
   openSettings(): Promise<void>;
   /** Saves the current final live reading through `logEntry`. A no-op while the scale is settling. */
   save(): Promise<void>;
+  /** Shows Health Connect's write-permission sheet and flushes anything waiting. */
+  allowHealthWrite(): Promise<void>;
+  /** Retries the Health Connect writes that are waiting. */
+  retryHealthWrite(): Promise<void>;
   /** The scale-only athlete flag ("pulse.lefu.athlete"), default off. */
   athlete: boolean;
   setAthlete(on: boolean): Promise<void>;
@@ -88,6 +102,8 @@ const EMPTY: ScaleData = {
   savedAt: null,
   history: null,
   athlete: false,
+  health: "unknown",
+  healthPending: 0,
 };
 
 const ACTIONS = {
@@ -148,6 +164,8 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [history, setHistory] = React.useState<ScaleHistory | null>(null);
+  const [health, setHealth] = React.useState<HealthSync>("unknown");
+  const [healthPending, setHealthPending] = React.useState(0);
 
   const readingRef = React.useRef<LeFuReading | null>(null);
   const profileRef = React.useRef<Profile | null>(profile);
@@ -159,6 +177,10 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
   const historyChain = React.useRef<Promise<void>>(Promise.resolve());
   const historyStats = React.useRef<ScaleHistory>({ received: 0, saved: 0, skipped: 0, failed: 0 });
   const dataTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Weigh-ins waiting for a Health Connect write, keyed by their deterministic client record id. */
+  const pendingHealth = React.useRef(new Map<string, ScaleWeighIn>());
+  /** Serialises Health Connect writes so a history burst cannot interleave. */
+  const healthChain = React.useRef<Promise<void>>(Promise.resolve());
 
   React.useEffect(() => {
     profileRef.current = profile;
@@ -191,6 +213,77 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
       dataChanged();
     }, 800);
   }, []);
+
+  /** Writes everything waiting, stopping at the first permission/unavailable/error so the screen can explain it. */
+  const flushHealth = React.useCallback(async (prompt = false) => {
+    try {
+      if ((await availability()) !== "available") {
+        setHealth("unavailable");
+        return;
+      }
+      let first = true;
+      for (const [id, weighIn] of pendingHealth.current) {
+        const result = await writeScaleWeighIn(weighIn, { prompt: prompt && first });
+        first = false;
+        if (!result.ok) {
+          setHealth(result.reason === "permission" ? "permission" : result.reason === "unavailable" ? "unavailable" : "failed");
+          return;
+        }
+        pendingHealth.current.delete(id);
+        setHealth("saved");
+      }
+    } catch {
+      setHealth("failed");
+    } finally {
+      setHealthPending(pendingHealth.current.size);
+    }
+  }, []);
+
+  /** Queue a saved weigh-in for Health Connect; `prompt` is for an explicit Save tap, never a history burst. */
+  const queueHealth = React.useCallback((weighIn: ScaleWeighIn, prompt = false) => {
+    pendingHealth.current.set(scaleClientRecordId(weighIn), weighIn);
+    setHealthPending(pendingHealth.current.size);
+    healthChain.current = healthChain.current.then(() => flushHealth(prompt)).catch(() => {});
+  }, [flushHealth]);
+
+  const refreshHealth = React.useCallback(async () => {
+    try {
+      if ((await availability()) !== "available") {
+        setHealth("unavailable");
+        return;
+      }
+      const permission = await writePermissionState();
+      setHealth(permission.missing.length > 0 ? "permission" : "ready");
+    } catch {
+      setHealth("unknown");
+    }
+  }, []);
+
+  React.useEffect(() => {
+    // Outside the effect body: the read is native and async, and its state belongs to the next tick.
+    const timer = setTimeout(() => void refreshHealth(), 0);
+    return () => clearTimeout(timer);
+  }, [refreshHealth]);
+
+  const allowHealthWrite = React.useCallback(async () => {
+    healthChain.current = healthChain.current
+      .then(async () => {
+        try {
+          await askWritePermissions();
+        } catch {
+          setHealth("failed");
+          return;
+        }
+        await flushHealth(false);
+      })
+      .catch(() => {});
+    await healthChain.current;
+  }, [flushHealth]);
+
+  const retryHealthWrite = React.useCallback(async () => {
+    healthChain.current = healthChain.current.then(() => flushHealth(false)).catch(() => {});
+    await healthChain.current;
+  }, [flushHealth]);
 
   /** One stored frame, at the scale's own timestamp, unless Pulse already has that weigh-in. */
   const backfill = React.useCallback(async (r: LeFuReading) => {
@@ -240,12 +333,13 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
       historyKeys.current.add(key);
       historyStats.current.saved++;
       scheduleDataChanged();
+      queueHealth({ atMs: ts * 1000, kg, fatPct }, false);
     } else {
       historyStats.current.failed++;
       console.warn("[scale] history entry not saved:", result.error);
     }
     publishHistory();
-  }, [publishHistory, scheduleDataChanged]);
+  }, [publishHistory, queueHealth, scheduleDataChanged]);
 
   React.useEffect(() => {
     const offReading = leFuScale.onReading((r) => {
@@ -325,18 +419,16 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
     setSaveError(null);
     try {
       const { composition } = compositionOf(r.frame, p, athleteRef.current);
+      const fatPct = composition?.bodyFatPercent ?? null;
       const c = actionCtx();
-      const result = await logEntry(c, {
-        kind: "weight",
-        kg: r.frame.weightKg,
-        fatPct: composition?.bodyFatPercent ?? null,
-        // Save at the weigh-in's arrival, not at the tap: the person may study the numbers before saving.
-        at: wallMinute(r.at, c.timeZone),
-      });
+      // Save at the weigh-in's arrival, not at the tap: the person may study the numbers before saving.
+      const at = wallMinute(r.at, c.timeZone);
+      const result = await logEntry(c, { kind: "weight", kg: r.frame.weightKg, fatPct, at });
       if (result.ok) {
         dataChanged();
         setSave("saved");
         setSavedAt(Date.now());
+        queueHealth({ atMs: fromWall(at, c.timeZone) * 1000, kg: r.frame.weightKg, fatPct }, true);
       } else {
         setSave("failed");
         setSaveError(result.error);
@@ -347,7 +439,7 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
     } finally {
       savingRef.current = false;
     }
-  }, []);
+  }, [queueHealth]);
 
   const control = React.useMemo<ScaleControl>(() => {
     const connect = async (id: string, profileOverride?: LeFuProfile | null) => {
@@ -356,8 +448,8 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
       setHistory(null);
       await leFuScale.connect(id, profileOverride);
     };
-    return { ...snap, ...ACTIONS, connect, save: saveReading, athlete, setAthlete };
-  }, [snap, athlete, setAthlete, saveReading]);
+    return { ...snap, ...ACTIONS, connect, save: saveReading, allowHealthWrite, retryHealthWrite, athlete, setAthlete };
+  }, [snap, athlete, setAthlete, saveReading, allowHealthWrite, retryHealthWrite]);
 
   const data = React.useMemo<ScaleData>(() => {
     const final = reading ? isFinalLeFuFrame(reading.frame, reading.profile ?? DEFAULT_V3_PROFILE) : false;
@@ -372,8 +464,10 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
       savedAt,
       history,
       athlete,
+      health,
+      healthPending,
     };
-  }, [reading, profile, athlete, save, saveError, savedAt, history]);
+  }, [reading, profile, athlete, save, saveError, savedAt, history, health, healthPending]);
 
   return (
     <ControlCtx.Provider value={control}>

@@ -35,6 +35,8 @@
         "android.permission.health.READ_HEALTH_DATA_HISTORY",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.READ_BODY_FAT",
+        "android.permission.health.WRITE_WEIGHT",
+        "android.permission.health.WRITE_BODY_FAT",
         "android.permission.health.READ_FLOORS_CLIMBED",
         "android.permission.health.READ_ELEVATION_GAINED",
         "android.permission.health.READ_HYDRATION",

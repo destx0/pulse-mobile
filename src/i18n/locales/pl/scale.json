@@ -113,5 +113,18 @@
     "noScaleFound": "Nie znaleziono wagi. Sprawdź, czy jest włączona i w pobliżu.",
     "btUnavailable": "Bluetooth nie jest dostępny w tej wersji.",
     "saveFailed": "Nie udało się zapisać tego ważenia."
+  },
+  "health": {
+    "title": "Health Connect",
+    "checking": "Sprawdzanie Health Connect…",
+    "ready": "Waga i tłuszcz są dodawane do Health Connect. Google Fit i inne aplikacje zdrowotne mogą je odczytać.",
+    "saved": "Dodano do Health Connect.",
+    "permission": "Zapisano w Pulse. Zezwól na zapis w Health Connect, aby Google Fit i inne aplikacje widziały ważenie.",
+    "unavailable": "Health Connect nie jest dostępny na tym telefonie.",
+    "failed": "Zapisano w Pulse. Zapis w Health Connect nie powiódł się.",
+    "pending": "Oczekuje na Health Connect: {{count}}",
+    "allow": "Zezwól na zapis w Health Connect",
+    "retry": "Ponów Health Connect",
+    "note": "Pulse zapisuje tylko wagę i tłuszcz z wagi, oznaczone jako Pulse. Konto Google nie jest używane."
   }
 }

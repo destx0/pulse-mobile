@@ -25,7 +25,7 @@ hey everyone, so some of you might remember my last post "is it legal to create 
 
 so i made it an app :)
 
-**pulse mobile** is an android app (react native + expo) and the main difference is that there is no server at all. it reads your fitbit data from health connect, scores everything on the phone and keeps it there. no account, no login, no google sign in, nothing goes anywhere. it only asks for read permissions, it never writes anything back to health connect
+**pulse mobile** is an android app (react native + expo) and the main difference is that there is no server at all. it reads your fitbit data from health connect, scores everything on the phone and keeps it there. no account, no login, no google sign in, nothing goes anywhere. it asks for read permissions for your fitbit data, and writes only your scale weigh-ins (weight and body fat) back to health connect
 
 what you get:
 - sleep, recovery and strain every morning, with a strain target for the day

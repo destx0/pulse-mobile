@@ -1,14 +1,17 @@
-// Thin wrapper over react-native-health-connect: availability, permissions and paginated range reads.
-// Everything Pulse needs is read-only; the Google Health app writes the Fitbit data into Health Connect.
+// Thin wrapper over react-native-health-connect: availability, permissions, paginated range reads and the one write
+// Pulse makes (a scale weigh-in's Weight/BodyFat records, src/health/healthWrite.ts). Everything else is read-only: the
+// Google Health app writes the Fitbit data into Health Connect.
 import {
   getGrantedPermissions,
   getSdkStatus,
   initialize,
+  insertRecords,
   openHealthConnectSettings,
   readRecords,
   requestPermission,
   SdkAvailabilityStatus,
   type BackgroundAccessPermission,
+  type HealthConnectRecord,
   type Permission,
   type ReadHealthDataHistoryPermission,
   type ReadRecordsOptions,
@@ -50,6 +53,10 @@ export const READ_TYPES = [
 export type ReadType = (typeof READ_TYPES)[number];
 
 const readPermissions: Permission[] = READ_TYPES.map((recordType) => ({ accessType: "read", recordType }));
+/** The only types Pulse writes: a scale weigh-in's weight and (when measured) body fat. Nothing else. */
+export const WRITE_TYPES = ["Weight", "BodyFat"] as const;
+export type WriteType = (typeof WRITE_TYPES)[number];
+const writePermissions: Permission[] = WRITE_TYPES.map((recordType) => ({ accessType: "write", recordType }));
 /** Without it Health Connect only serves the 30 days before the grant; baselines want 180. */
 const historyPermission: ReadHealthDataHistoryPermission = { accessType: "read", recordType: "ReadHealthDataHistory" };
 /** Lets a closed Pulse read Health Connect (READ_HEALTH_DATA_IN_BACKGROUND), for the background sync task (src/background/task.ts); without it the task skips. */
@@ -119,6 +126,35 @@ export async function askBackgroundPermission(): Promise<PermissionState> {
   await ensureInitialized();
   await requestPermission([backgroundPermission]);
   return permissionState();
+}
+
+export type WritePermissionState = {
+  granted: WriteType[];
+  missing: WriteType[];
+};
+
+/** What Health Connect has granted Pulse for writing (weight and body fat only). */
+export async function writePermissionState(): Promise<WritePermissionState> {
+  await ensureInitialized();
+  const granted = await getGrantedPermissions();
+  const has = (type: WriteType) => granted.some((p) => p.accessType === "write" && p.recordType === type);
+  return {
+    granted: WRITE_TYPES.filter(has),
+    missing: WRITE_TYPES.filter((type) => !has(type)),
+  };
+}
+
+/** Shows the system sheet for the two write types; returns what was granted. */
+export async function askWritePermissions(): Promise<WritePermissionState> {
+  await ensureInitialized();
+  await requestPermission(writePermissions);
+  return writePermissionState();
+}
+
+/** Inserts records of one type (Health Connect rejects a mixed batch); the caller owns their metadata. */
+export async function insertHealthRecords(records: HealthConnectRecord[]): Promise<string[]> {
+  await ensureInitialized();
+  return insertRecords(records);
 }
 
 export { openHealthConnectSettings };

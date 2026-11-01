@@ -113,5 +113,18 @@
     "noScaleFound": "Keine Waage gefunden. Stelle sicher, dass sie wach und in der Nähe ist.",
     "btUnavailable": "Bluetooth ist in dieser Version nicht verfügbar.",
     "saveFailed": "Diese Wiegung konnte nicht gespeichert werden."
+  },
+  "health": {
+    "title": "Health Connect",
+    "checking": "Health Connect wird geprüft…",
+    "ready": "Gewicht und Körperfett werden in Health Connect geschrieben. Google Fit und andere Gesundheits-Apps können sie lesen.",
+    "saved": "In Health Connect geschrieben.",
+    "permission": "In Pulse gespeichert. Erlaube Health Connect-Schreibzugriff, damit Google Fit und andere Apps die Wiegung sehen.",
+    "unavailable": "Health Connect ist auf diesem Telefon nicht verfügbar.",
+    "failed": "In Pulse gespeichert. Der Schreibvorgang in Health Connect ist fehlgeschlagen.",
+    "pending": "Warten auf Health Connect: {{count}}",
+    "allow": "Health Connect-Schreibzugriff erlauben",
+    "retry": "Health Connect erneut versuchen",
+    "note": "Pulse schreibt nur Gewicht und Körperfett der Waage, gekennzeichnet als Pulse. Es wird kein Google-Konto verwendet."
   }
 }
