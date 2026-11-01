@@ -17,9 +17,10 @@ import { NotificationsSection } from "./NotificationsSection";
 import { GoalsSettings } from "@/screens/goals/GoalsSettings";
 import { LeetCodeSection } from "./LeetCodeSection";
 import { ProfileCard } from "./ProfileCard";
+import { ScaleSection } from "./Scale";
 
-type SectionId = "profile" | "source" | "app" | "live" | "notifications" | "goals" | "leetcode";
-const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "notifications", "goals", "leetcode"];
+type SectionId = "profile" | "source" | "app" | "live" | "scale" | "notifications" | "goals" | "leetcode";
+const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "scale", "notifications", "goals", "leetcode"];
 /** Older names: ?s=sync, ?s=appearance, ?s=profile, and the web's ?s=account. */
 const ALIAS: Record<string, SectionId> = { sync: "source", appearance: "app", account: "profile" };
 
@@ -112,6 +113,8 @@ export function SettingsScreen() {
           <View className="w-full gap-3">
             {section === "live" ? (
               <LiveHeartRate />
+            ) : section === "scale" ? (
+              <ScaleSection />
             ) : section === "notifications" ? (
               <NotificationsSection />
             ) : section === "goals" ? (

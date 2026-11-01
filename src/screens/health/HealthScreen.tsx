@@ -246,6 +246,16 @@ function NutritionCard() {
   );
 }
 
+/** The way to the scale: static, so the hub's query stays as it is. */
+function ScaleCard() {
+  const { t } = useTranslation("scale");
+  return (
+    <SectionShell variant="card" title={t("card.title")} info={false} href="/scale">
+      <Text className={CAPTION}>{t("card.body")}</Text>
+    </SectionShell>
+  );
+}
+
 /** The Health tab's query and key; Home prefetches them. */
 export const healthQuery = async (ctx: QueryCtx) => ({ vm: await getHealthHub(ctx), now: ctx.now * 1000 });
 export const HEALTH_KEY = ["health"] as const;
@@ -276,6 +286,7 @@ export function HealthScreen() {
           <HeartRate hr={vm.heartRate} now={now} />
         </SectionShell>
         <NutritionCard />
+        <ScaleCard />
       </View>
       <Text className={cn(CAPTION, "text-center")}>{t("hub.footnote")}</Text>
     </PageShell>
@@ -351,6 +362,7 @@ function HealthLoading() {
           </View>
         </SectionShell>
         <NutritionCard />
+        <ScaleCard />
       </View>
       <Text className={cn(CAPTION, "text-center")}>{t("hub.footnote")}</Text>
     </PageShell>

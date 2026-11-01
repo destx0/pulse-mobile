@@ -920,3 +920,11 @@ same local-day rule as the health pipeline; do not compare a UTC date string to 
 
 The public recent list is capped at 20 submissions. When all 20 are from today, the count is shown as `20+`: a lower
 bound is honest; inventing the rest is not.
+
+## A second BLE device: the scale
+
+The HealthSense BS191 is a LeFu `FFF0` scale, not a heart-rate band: it writes commands to `FFF1`, notifies measurements on `FFF4`, and expects a profile/clock/history sequence. It gets its own controller (`src/health/lefuBle.ts`) and provider (`src/state/lefuScale.tsx`) rather than growing `src/health/ble.ts`, so the band's link, storage key and retry policy stay exactly as they were. The scale's key is `pulse.lefu.device`; the athlete flag is `pulse.lefu.athlete`.
+
+The codec and the LeFu `libsl` composition model are pure (`src/health/lefu.ts`), so the golden vectors run in Node. The controller scans unfiltered because the advertisement's manufacturer data carries the `CF01…` type string and the service list is not always present; `parseLeFuProfile` selects the V2/V3 offset from the payload length. Base64 lives in `src/lib/base64.ts` because Hermes has no `Buffer`, and both the heart-rate parser and the scale codec use it.
+
+A live weigh-in is saved only on the Save tap; stored history frames are written at the scale's timestamp through `logEntry`, deduped against recent Pulse weight entries. Body composition beyond weight and body fat is display-only for now.

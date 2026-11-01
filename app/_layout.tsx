@@ -130,6 +130,7 @@ function Screens({ onboarded }: { onboarded: boolean }) {
           <Stack.Screen name="recovery" />
           <Stack.Screen name="reports" />
           <Stack.Screen name="reports/[period]" />
+          <Stack.Screen name="scale" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="sleep" />
           <Stack.Screen name="sleep/nap/[id]" />

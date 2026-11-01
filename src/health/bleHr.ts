@@ -1,4 +1,5 @@
 import { i18n } from "@/i18n/config";
+import { base64ToBytes } from "@/lib/base64";
 // Live heart rate over Bluetooth, the pure half: decoding the standard Heart Rate Measurement characteristic (0x2A37)
 // a band sends while it shares heart rate, artifact-filtered RMSSD over the beat-to-beat (RR) intervals, the
 // 2-minute trace the screens draw, and the small policies the controller (ble.ts) uses: which scanned devices look
@@ -21,39 +22,9 @@ export function sameUuid(a: string, b: string): boolean {
 }
 
 // ── Base64 ──────────────────────────────────────────────────────────────────
-
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-const LOOKUP = (() => {
-  const t = new Int8Array(128).fill(-1);
-  for (let i = 0; i < 64; i++) t[ALPHABET.charCodeAt(i)] = i;
-  // URL-safe spellings, in case a platform ever hands those over.
-  t["-".charCodeAt(0)] = 62;
-  t["_".charCodeAt(0)] = 63;
-  return t;
-})();
-
-/**
- * Base64 → bytes. Hermes has no Buffer, so react-native-ble-plx's base64 values are decoded here. Padding ends the
- * value; characters outside the alphabet (whitespace) are skipped.
- */
-export function base64ToBytes(b64: string): Uint8Array {
-  const out: number[] = [];
-  let acc = 0;
-  let bits = 0;
-  for (let i = 0; i < b64.length; i++) {
-    const code = b64.charCodeAt(i);
-    if (code === 61 /* = */) break;
-    const v = code < 128 ? LOOKUP[code] : -1;
-    if (v < 0) continue;
-    acc = ((acc << 6) | v) & 0xffffff;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out.push((acc >> bits) & 0xff);
-    }
-  }
-  return Uint8Array.from(out);
-}
+// Shared with the scale's codec (src/lib/base64.ts); kept exported here for the callers and tests that read it from
+// the heart-rate module.
+export { base64ToBytes, bytesToBase64 } from "@/lib/base64";
 
 // ── Heart Rate Measurement (0x2A37) ─────────────────────────────────────────
 
