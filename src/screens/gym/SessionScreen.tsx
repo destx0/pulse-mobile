@@ -405,7 +405,7 @@ function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set
 
   return (
     <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-2 rounded-lg px-1 py-1">
-      <Press onPress={onMenu} className="w-6 items-center justify-center">
+      <Press onPress={onMenu} hitSlop={10} className="w-6 items-center justify-center">
         <Text className={cn("font-numeric text-[13px]", set.completed ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
       <Text className="min-w-0 flex-1 font-numeric text-[12px] leading-4 text-muted-foreground" numberOfLines={1}>
@@ -422,6 +422,7 @@ function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set
         accessibilityRole="checkbox"
         accessibilityState={{ checked: set.completed }}
         onPress={() => onTick(draft())}
+        hitSlop={6}
         className={cn("size-8 items-center justify-center rounded-full", set.completed ? "bg-primary" : "border border-input")}
       >
         {set.completed && <Icon icon={Check} size={16} tone="primary-foreground" strokeWidth={2.6} />}

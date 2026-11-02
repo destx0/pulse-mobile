@@ -203,8 +203,8 @@ export type ExercisePageVM = {
 /** One exercise: its records, its estimated-1RM curve and every session it was trained in (newest first). */
 export async function getGymExercise(ctx: QueryCtx, exerciseId: string): Promise<ExercisePageVM | null> {
   const [map, sessions, sets] = await Promise.all([exerciseMap(ctx.store), ctx.store.gymSessions(), ctx.store.gymExerciseSets([exerciseId])]);
-  const exercise = map.get(exerciseId);
-  if (!exercise) return null;
+  // A custom exercise deleted from the catalogue still has its sets: show it under its id rather than a dead screen.
+  const exercise = map.get(exerciseId) ?? ghost(exerciseId);
   const records = recordsOf(sets);
   const record = records.get(exerciseId) ?? null;
   // The record before the latest one: the second-best 1RM, which the header shows as "was 102.5".
