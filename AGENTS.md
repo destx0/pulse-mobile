@@ -80,6 +80,7 @@ docs/         rewrite-plan.md, plan.md, design/spec.md, learning.md, onboarding.
 - Commit as `adityaongit`, email `74150665+adityaongit@users.noreply.github.com`. Check `git config user.email` before committing.
 - Conventional commit messages, signed off (`git commit -s`).
 - Version bumps are small patch jumps (`0.6.1`, `0.7.1`) unless the owner asks for a larger one; `package.json` and `app.json` move together.
+- **Every APK pushed to pugg is a new version.** Before `pugg` runs: bump the version in `package.json` and `app.json` together, commit it, and push `main`, then build the APK from that commit. The APK's `versionName` is then the version in the repo, so a downloaded build traces back to a commit. Two uploads never carry the same version, even when only the target ABI differs (the emulator's and the phone's builds are the same version, from the same commit).
 - Once typecheck, lint, test and the bundle check pass and the change has been tried on the phone, fast-forward `origin/main`. Never force-push.
 
 ## Testing
