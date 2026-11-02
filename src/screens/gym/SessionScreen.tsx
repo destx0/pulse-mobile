@@ -23,9 +23,9 @@ import { MenuPanel, useMenu } from "@/ui/Menu";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
+import { FACES } from "@/ui/fontClasses";
 import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
-import { FACES } from "@/ui/fontClasses";
 import { useTheme } from "@/ui/theme";
 import { ConfirmDialog, MenuItem, clockText, lengthText, useNow, whenText } from "./parts";
 
@@ -91,11 +91,13 @@ export function SessionScreen() {
 
   return (
     <View className="flex-1">
-      <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <DetailShell
           title={session.name}
           subtitle={`${clockText(elapsed)} · ${t("session.setsCount", { count: vm.setCount })}`}
           floatingAction={false}
+          // A workout is opened to be used, not watched slide in: its sets draw in the first frame.
+          instant
           backHref="/gym"
           action={
             <View className="flex-row items-center gap-1">
@@ -273,7 +275,7 @@ function BlockCard({
       </View>
 
       <View className="mb-1 flex-row items-center gap-2 px-1">
-        <Text className="w-6 text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.set")}</Text>
+        <Text className="w-8 text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.set")}</Text>
         <Text className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.previous")}</Text>
         {!hold && <Text className="w-[62px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{unit === "lb" ? t("session.lb") : t("session.kg")}</Text>}
         {hold && <Text className="w-[62px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.sec")}</Text>}
@@ -405,7 +407,7 @@ function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set
 
   return (
     <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-2 rounded-lg px-1 py-1">
-      <Press onPress={onMenu} hitSlop={10} className="w-6 items-center justify-center">
+      <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center">
         <Text className={cn("font-numeric text-[13px]", set.completed ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
       <Text className="min-w-0 flex-1 font-numeric text-[12px] leading-4 text-muted-foreground" numberOfLines={1}>
@@ -446,7 +448,9 @@ function NumCell({ value, onChangeText, onEnd, className, dim }: { value: string
       placeholder="0"
       placeholderTextColor={c["muted-foreground"]}
       className={cn("h-9 rounded-lg bg-secondary text-center font-numeric text-[15px] font-semibold text-foreground", dim && "text-muted-foreground", className)}
-      style={{ fontFamily: FACES.numeric.semibold }}
+      // Android gives a TextInput font padding above the line, which a 36 px box then clips: a 0 lost its top and read
+      // as a U ("10" as "IU"). No padding, no extra font padding, and the glyph sits centred.
+      style={{ paddingVertical: 0, includeFontPadding: false, textAlignVertical: "center", fontFamily: FACES.numeric.semibold }}
     />
   );
 }

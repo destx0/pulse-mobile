@@ -950,3 +950,14 @@ timer left running wrote 47-hour workouts in the real export.
 Picking the file needs no new package: `expo-file-system` (SDK 57) exports `File.pickFileAsync()` and `File.text()`, so
 `expo-document-picker` is not installed. The picker returns a temporary copy, which is read once and parsed in
 JavaScript; nothing is copied into the app's document directory.
+
+## Two Android layout traps the gym screens hit
+
+NativeWind styles the core components it maps (View, Text, Pressable, TextInput, ScrollView…), but not every one:
+`KeyboardAvoidingView` with `className="flex-1"` gets **no style at all**, so it lays out at zero height and clips the
+screen to its absolutely-positioned header. Give it `style={{ flex: 1 }}`. The symptom is a page that shows its title
+and nothing else, while every hook reports focused, ready and populated.
+
+A `TextInput` in a fixed-height box inherits Android's font padding above the line, and the top of the glyph is clipped:
+a `0` with its top cut reads as a `U`, so "10" looked like "IU" and every set looked wrong. `paddingVertical: 0`,
+`includeFontPadding: false` and `textAlignVertical: "center"` fix it. The value was never wrong — only the clip.

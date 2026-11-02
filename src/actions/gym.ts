@@ -292,7 +292,7 @@ export type ImportOutcome = ImportSummary & {
   routines: number;
 };
 
-export type ImportPreview = { result: ReturnType<typeof importStrongCsv>; duplicates: number };
+export type ImportPreview = { result: ReturnType<typeof importStrongCsv>; duplicates: number; custom: string[] };
 
 /** Reads the file and says what it holds, without writing anything: the import screen shows this before the tap. */
 export async function previewStrong(c: ActionCtx, text: string): Promise<GymResult<ImportPreview>> {
@@ -301,7 +301,9 @@ export async function previewStrong(c: ActionCtx, text: string): Promise<GymResu
   const result = importStrongCsv(text, { timeZone: c.timeZone });
   if (!result.sessions.length) return fail("nothingToImport");
   const existing = new Set((await c.store.gymSessions()).map((s) => s.startTs));
-  return { ok: true, data: { result, duplicates: result.sessions.filter((s) => existing.has(s.startTs)).length } };
+  const known = await exerciseMap(c.store);
+  const custom = result.summary.names.filter((n) => !resolveExerciseId(n.name) && ![...known.values()].some((e) => e.name.toLowerCase() === n.name.toLowerCase())).map((n) => n.name);
+  return { ok: true, data: { result, duplicates: result.sessions.filter((s) => existing.has(s.startTs)).length, custom } };
 }
 
 /**

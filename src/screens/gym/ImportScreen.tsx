@@ -67,6 +67,7 @@ export function ImportScreen() {
 
   const s = done ?? preview?.result.summary ?? null;
   const duplicates = done?.duplicates ?? preview?.duplicates ?? 0;
+  const newExercises = done?.custom.length ?? preview?.custom.length ?? 0;
 
   return (
     <DetailShell
@@ -88,7 +89,7 @@ export function ImportScreen() {
               </View>
               <View className="flex-row gap-2">
                 <StatTile label={t("import.notes", { count: s.notes })} value={String(s.notes)} />
-                <StatTile label={t("import.custom", { count: (done?.custom ?? []).length })} value={String(done?.custom.length ?? 0)} />
+                <StatTile label={t("import.custom", { count: newExercises })} value={String(newExercises)} />
               </View>
               {!!s.from && !!s.to && <Text className="text-[12px] text-muted-foreground">{t("import.range", { from: formatDay(s.from, DAY.monthDay), to: formatDay(s.to, DAY.monthDay) })}</Text>}
               {duplicates > 0 && <Text className="text-[12px] text-muted-foreground">{t("import.duplicates", { count: duplicates })}</Text>}

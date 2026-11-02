@@ -225,7 +225,7 @@ export async function getGymExercise(ctx: QueryCtx, exerciseId: string): Promise
   }
   const history = [...groups.entries()]
     .map(([sessionId, list]) => ({ session: byId.get(sessionId), sets: list.sort((a, b) => a.setNo - b.setNo) }))
-    .filter((h): h is { session: GymSession; sets: GymSet[] } => !!h.session)
+    .filter((h): h is { session: GymSession; sets: GymSet[] } => !!h.session && h.session.finished)
     .sort((a, b) => b.session.startTs - a.session.startTs)
     .slice(0, 30)
     .map((h) => ({ session: cardOf(h.session, h.sets, map), sets: h.sets }));
