@@ -3,7 +3,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import { View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import type { Tabs } from "expo-router";
-import { HeartPulse, Menu, NotebookPen, type LucideIcon } from "lucide-react-native";
+import { Dumbbell, HeartPulse, Menu, type LucideIcon } from "lucide-react-native";
 import { alpha } from "../color";
 import { Glass } from "../Glass";
 import { haptic } from "../haptics";
@@ -23,13 +23,15 @@ const LENS_RADIUS = GLASS_RADIUS - 4;
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-// The web app's tabs, in its order (src/lib/url.ts TAB_ROOT): Home, Health, Journal, More. The route file of each is
-// app/(tabs)/<route>.tsx.
-export const TABS: { route: string; labelKey: "tabs.home" | "tabs.health" | "tabs.journal" | "tabs.more"; icon: LucideIcon }[] = [
-  { route: "index", labelKey: "tabs.home", icon: HomeChart },
-  { route: "health", labelKey: "tabs.health", icon: HeartPulse },
-  { route: "journal", labelKey: "tabs.journal", icon: NotebookPen },
-  { route: "more", labelKey: "tabs.more", icon: Menu },
+// The tabs: Home, Health, Gym, More. Gym took Journal's place; the journal is still a route, reachable from More and
+// from the check-in action. The route file of each is app/(tabs)/<route>.tsx.
+type TabLabel = { ns: "ui"; labelKey: "tabs.home" | "tabs.health" | "tabs.more" } | { ns: "gym"; labelKey: "tab" };
+
+export const TABS: ({ route: string; icon: LucideIcon } & TabLabel)[] = [
+  { route: "index", ns: "ui", labelKey: "tabs.home", icon: HomeChart },
+  { route: "health", ns: "ui", labelKey: "tabs.health", icon: HeartPulse },
+  { route: "gym", ns: "gym", labelKey: "tab", icon: Dumbbell },
+  { route: "more", ns: "ui", labelKey: "tabs.more", icon: Menu },
 ];
 
 /**
@@ -53,6 +55,7 @@ function Lens({ index, itemWidth }: { index: number; itemWidth: number }) {
 /** Phone tab bar: a 62 px glass squircle with four destinations (spec §4.2, G1), for expo-router's <Tabs tabBar>. */
 function Bar({ state, navigation, current: shown }: TabBarProps & { current: number }) {
   const { t } = useTranslation("ui");
+  const { t: tg } = useTranslation("gym");
   const [width, setWidth] = useState(0);
   // The tapped tab lights up (lens, icon, label) in its own small render; the tab's screen renders a frame later. One
   // render for both would hold the feedback until the whole screen had rendered.
@@ -64,8 +67,9 @@ function Bar({ state, navigation, current: shown }: TabBarProps & { current: num
     <Glass radius={GLASS_RADIUS} accessibilityRole="tablist" accessibilityLabel={t("tabs.primary")} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height: TAB_BAR_HEIGHT, flex: 1, minWidth: 0, padding: 4 }}>
       {width > 0 && <Lens index={current} itemWidth={itemWidth} />}
       <View className="h-full flex-row">
-        {TABS.map(({ route, labelKey, icon }, i) => {
-          const label = t(labelKey);
+        {TABS.map((tab, i) => {
+          const { route, icon } = tab;
+          const label = tab.ns === "gym" ? tg(tab.labelKey) : t(tab.labelKey);
           const route_ = state.routes.find((r) => r.name === route);
           const on = i === current;
           return (

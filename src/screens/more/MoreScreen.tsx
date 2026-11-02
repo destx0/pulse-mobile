@@ -3,7 +3,7 @@
 // Help, Your data, then About. The account row is Profile (no accounts); Coach opens the coach's settings.
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Activity, Archive, Bluetooth, BotMessageSquare, BookOpen, CalendarDays, CalendarRange, ChartLine, Code2, Database, ListChecks, Palette, Plug, Scale, Target, UserRound, Wind } from "lucide-react-native";
+import { Activity, Archive, Bluetooth, BotMessageSquare, BookOpen, Calculator, CalendarDays, CalendarRange, ChartLine, Code2, Database, Dumbbell, FileUp, ListChecks, NotebookPen, Palette, Plug, Ruler, Scale, Target, Trophy, UserRound, Wind } from "lucide-react-native";
 import { i18n } from "@/i18n/config";
 import { formatDay, rangeLabel } from "@/lib/format";
 import { SCORING_VERSION } from "@/pipeline";
@@ -26,6 +26,15 @@ const settingsRows = (): LinkListRow[] => [
   { icon: Target, label: i18n.t("more:row.goals"), href: "/settings?s=goals" },
 ];
 
+/** The gym: the history, the records board, the tape and the two calculators, and the Strong import. */
+const gymRows = (): LinkListRow[] => [
+  { icon: Dumbbell, label: i18n.t("gym:more.history"), href: "/gym/history" },
+  { icon: Trophy, label: i18n.t("gym:more.records"), href: "/gym/records" },
+  { icon: Ruler, label: i18n.t("gym:more.measure"), href: "/gym/measurements" },
+  { icon: Calculator, label: i18n.t("gym:more.tools"), href: "/gym/tools" },
+  { icon: FileUp, label: i18n.t("gym:more.import"), href: "/gym/import" },
+];
+
 /** Both sessions that run on the band's live heart rate (halo's "Live" group). */
 const liveLinks = (): LinkListRow[] => [
   { icon: Wind, label: i18n.t("more:row.breathe"), description: i18n.t("more:row.breatheHint"), href: "/breathe" },
@@ -39,6 +48,7 @@ export function MoreScreen() {
   const { t } = useTranslation("more");
   const settings = settingsRows();
   const live = liveLinks();
+  const gym = gymRows();
   const { data: vm } = useScreen(getMore, MORE_KEY);
   if (!vm)
     return (
@@ -55,7 +65,8 @@ export function MoreScreen() {
           />
           <LinkListSkeleton title={t("group.trends")} rows={[{ icon: ChartLine, label: t("row.trends") }]} />
           <LinkListSkeleton title={t("group.live")} rows={live} />
-          <LinkListSkeleton title={t("group.journal")} rows={[{ icon: ListChecks, label: t("row.behaviours") }]} />
+          <LinkListSkeleton title={t("group.journal")} rows={[{ icon: NotebookPen, label: i18n.t("gym:more.journal") }, { icon: ListChecks, label: t("row.behaviours") }]} />
+          <LinkListSkeleton title={i18n.t("gym:more.group")} rows={gym} />
           <LinkListSkeleton title={t("group.help")} rows={[{ icon: BookOpen, label: t("row.howPulseWorks") }]} />
           <LinkListSkeleton title={t("group.yourData")} rows={[{ icon: Database, label: t("row.export") }]} />
           <About version={APP_VERSION} scoringVersion={SCORING_VERSION} />
@@ -76,7 +87,14 @@ export function MoreScreen() {
         <LinkList title={t("group.reports")} rows={reports} />
         <LinkList title={t("group.trends")} rows={[{ icon: ChartLine, label: t("row.trends"), aside: t("row.trendsAside"), href: "/trends" }]} />
         <LinkList title={t("group.live")} rows={live} />
-        <LinkList title={t("group.journal")} rows={[{ icon: ListChecks, label: t("row.behaviours"), aside: t("row.behavioursAside", { shown: vm.behaviours.shown, total: vm.behaviours.total }), href: "/more/behaviours" }]} />
+        <LinkList
+          title={t("group.journal")}
+          rows={[
+            { icon: NotebookPen, label: i18n.t("gym:more.journal"), href: "/journal" },
+            { icon: ListChecks, label: t("row.behaviours"), aside: t("row.behavioursAside", { shown: vm.behaviours.shown, total: vm.behaviours.total }), href: "/more/behaviours" },
+          ]}
+        />
+        <LinkList title={i18n.t("gym:more.group")} rows={gym} />
         <LinkList title={t("group.help")} rows={[{ icon: BookOpen, label: t("row.howPulseWorks"), aside: t("row.scoresAside", { count: SCORE_DOCS.length }), href: "/more/how-it-works" }]} />
         <LinkList title={t("group.yourData")} rows={[{ icon: Database, label: t("row.export"), aside: t("row.exportAside"), href: "/more/data" }]} />
         <About version={vm.version} scoringVersion={vm.scoringVersion} />

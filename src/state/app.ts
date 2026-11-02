@@ -371,7 +371,10 @@ export async function reimport(): Promise<void> {
 export async function reset(): Promise<void> {
   const { store } = state;
   if (running) await running.catch(() => {});
-  if (store) await store.clearAll();
+  if (store) {
+    await store.clearAll();
+    await store.clearGym();
+  }
   await resetLeetCode();
   deleteAllPhotos();
   await AsyncStorage.multiRemove([SOURCE_KEY, OWN_PROFILE_KEY]).catch(() => {});

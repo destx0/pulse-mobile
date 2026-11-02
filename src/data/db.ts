@@ -5,6 +5,7 @@
 import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { isDeadConnection } from "./deadConnection";
 import type { CoachChatRow, DayRange, EntrySource, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
+import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet, SetType } from "./gym";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
@@ -65,6 +66,33 @@ create index if not exists health_records_day on health_records (day);
 create table if not exists coach_chats (id text primary key, title text not null, messages text not null, created_at integer not null, updated_at integer not null);
 create index if not exists coach_chats_recent on coach_chats (updated_at desc, id desc);
 create table if not exists leetcode_profiles (username text primary key, data text not null);
+-- The gym log (src/core/gym). Weights are kilograms; a routine's items and a session's sets are ordered by position.
+create table if not exists gym_exercises (
+  id text primary key, name text not null, body_part text not null, equipment text not null, custom integer not null default 0,
+  hold integer not null default 0, unit text not null default 'kg', note text
+);
+create table if not exists gym_routines (
+  id text primary key, name text not null, notes text, position integer not null default 0, updated_at integer not null
+);
+create table if not exists gym_routine_items (
+  routine_id text not null, exercise_id text not null, position integer not null, sets integer not null default 0,
+  reps integer not null default 0, rest_sec integer, note text, primary key (routine_id, position)
+);
+create table if not exists gym_sessions (
+  id text primary key, day text not null, start_ts integer not null, end_ts integer, name text not null, notes text,
+  routine_id text, finished integer not null default 0, rest_started_ts integer, rest_sec integer
+);
+create index if not exists gym_sessions_start on gym_sessions (start_ts desc);
+create index if not exists gym_sessions_day on gym_sessions (day);
+create table if not exists gym_sets (
+  id text primary key, session_id text not null, exercise_id text not null, position integer not null, set_no integer not null,
+  weight_kg real not null default 0, reps integer not null default 0, seconds real, distance_m real, rpe real,
+  type text not null default 'normal', superset_id text, completed integer not null default 0, ts integer, note text
+);
+create index if not exists gym_sets_session on gym_sets (session_id, position, set_no);
+create index if not exists gym_sets_exercise on gym_sets (exercise_id, ts);
+create table if not exists gym_measurements (id text primary key, day text not null, kind text not null, value real not null, unique (day, kind));
+create table if not exists gym_import (id integer primary key check (id = 1), data text not null);
 `;
 
 /** Columns added after a release: each `alter` fails harmlessly on a database that already has it. */
@@ -87,6 +115,8 @@ const MIGRATIONS = [
   "alter table hr_days add column minute integer not null default 0",
   // Units and the clock, JSON { units, hours } (Settings › App).
   "alter table profile add column display text",
+  // Supersets: two exercises of a session sharing an id.
+  "alter table gym_sets add column superset_id text",
 ];
 
 const DAY = 86_400;
@@ -787,12 +817,215 @@ class SqliteStore implements Store {
     await this.db.runAsync("delete from leetcode_profiles");
   }
 
+
+  // ── the gym log ───────────────────────────────────────────────────────────────────────────────────────────────────
+  async gymExercises() {
+    const rows = await this.db.getAllAsync<GymExerciseRow>("select * from gym_exercises order by name");
+    return rows.map(gymExerciseOf);
+  }
+  async putGymExercises(rows: GymExercise[]) {
+    if (!rows.length) return;
+    await this.tx(async (db) => {
+      for (const e of rows) {
+        await db.runAsync(
+          `insert or replace into gym_exercises (id, name, body_part, equipment, custom, hold, unit, note) values (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [e.id, e.name, e.bodyPart, e.equipment, bool(e.custom), bool(e.hold), e.unit, e.note],
+        );
+      }
+    });
+  }
+  async deleteGymExercise(id: string) {
+    await this.db.runAsync("delete from gym_exercises where id = ?", [id]);
+  }
+  async gymRoutines() {
+    const routines = await this.db.getAllAsync<GymRoutineRow>("select * from gym_routines order by position, name");
+    const items = await this.db.getAllAsync<GymRoutineItemRow>("select * from gym_routine_items order by routine_id, position");
+    return { routines: routines.map(gymRoutineOf), items: items.map(gymRoutineItemOf) };
+  }
+  async putGymRoutine(routine: GymRoutine, items: GymRoutineItem[]) {
+    await this.tx(async (db) => {
+      await db.runAsync(
+        `insert or replace into gym_routines (id, name, notes, position, updated_at) values (?, ?, ?, ?, ?)`,
+        [routine.id, routine.name, routine.notes, routine.position, routine.updatedAt],
+      );
+      await db.runAsync("delete from gym_routine_items where routine_id = ?", [routine.id]);
+      for (const i of items) {
+        await db.runAsync(
+          `insert into gym_routine_items (routine_id, exercise_id, position, sets, reps, rest_sec, note) values (?, ?, ?, ?, ?, ?, ?)`,
+          [i.routineId, i.exerciseId, i.position, i.sets, i.reps, i.restSec, i.note],
+        );
+      }
+    });
+  }
+  async deleteGymRoutine(id: string) {
+    await this.tx(async (db) => {
+      await db.runAsync("delete from gym_routine_items where routine_id = ?", [id]);
+      await db.runAsync("delete from gym_routines where id = ?", [id]);
+    });
+  }
+  async gymSessions() {
+    const rows = await this.db.getAllAsync<GymSessionRow>("select * from gym_sessions order by start_ts desc");
+    return rows.map(gymSessionOf);
+  }
+  async putGymSession(s: GymSession) {
+    await this.db.runAsync(
+      `insert or replace into gym_sessions (id, day, start_ts, end_ts, name, notes, routine_id, finished, rest_started_ts, rest_sec)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.day, s.startTs, s.endTs, s.name, s.notes, s.routineId, bool(s.finished), s.restStartedTs, s.restSec],
+    );
+  }
+  async deleteGymSession(id: string) {
+    await this.tx(async (db) => {
+      await db.runAsync("delete from gym_sets where session_id = ?", [id]);
+      await db.runAsync("delete from gym_sessions where id = ?", [id]);
+    });
+  }
+  async gymSets(sessionIds: string[]) {
+    if (!sessionIds.length) return [];
+    const marks = sessionIds.map(() => "?").join(", ");
+    const rows = await this.db.getAllAsync<GymSetRow>(
+      `select * from gym_sets where session_id in (${marks}) order by session_id, position, set_no`,
+      sessionIds,
+    );
+    return rows.map(gymSetOf);
+  }
+  async gymAllSets() {
+    const rows = await this.db.getAllAsync<GymSetRow>("select * from gym_sets order by ts, position, set_no");
+    return rows.map(gymSetOf);
+  }
+  async gymExerciseSets(exerciseIds: string[], beforeTs?: number) {
+    if (!exerciseIds.length) return [];
+    const marks = exerciseIds.map(() => "?").join(", ");
+    const rows = await this.db.getAllAsync<GymSetRow>(
+      `select * from gym_sets where exercise_id in (${marks}) and (? is null or ts <= ?) order by ts, position, set_no`,
+      [...exerciseIds, beforeTs ?? null, beforeTs ?? null],
+    );
+    return rows.map(gymSetOf);
+  }
+  async putGymSet(s: GymSet) {
+    await this.db.runAsync(
+      `insert or replace into gym_sets (id, session_id, exercise_id, position, set_no, weight_kg, reps, seconds, distance_m, rpe, type, superset_id, completed, ts, note)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [s.id, s.sessionId, s.exerciseId, s.position, s.setNo, s.weightKg, s.reps, s.seconds, s.distanceM, s.rpe, s.type, s.supersetId, bool(s.completed), s.ts, s.note],
+    );
+  }
+  async putGymSets(sets: GymSet[]) {
+    if (!sets.length) return;
+    await this.tx(async (db) => {
+      for (const s of sets) {
+        await db.runAsync(
+          `insert or replace into gym_sets (id, session_id, exercise_id, position, set_no, weight_kg, reps, seconds, distance_m, rpe, type, superset_id, completed, ts, note)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [s.id, s.sessionId, s.exerciseId, s.position, s.setNo, s.weightKg, s.reps, s.seconds, s.distanceM, s.rpe, s.type, s.supersetId, bool(s.completed), s.ts, s.note],
+        );
+      }
+    });
+  }
+  async deleteGymSet(id: string) {
+    await this.db.runAsync("delete from gym_sets where id = ?", [id]);
+  }
+  async gymMeasurements() {
+    const rows = await this.db.getAllAsync<GymMeasurementRow>("select * from gym_measurements order by day desc");
+    return rows.map(gymMeasurementOf);
+  }
+  async putGymMeasurement(m: GymMeasurement) {
+    await this.db.runAsync(
+      `insert into gym_measurements (id, day, kind, value) values (?, ?, ?, ?)
+       on conflict (day, kind) do update set id = excluded.id, value = excluded.value`,
+      [m.id, m.day, m.kind, m.value],
+    );
+  }
+  async deleteGymMeasurement(id: string) {
+    await this.db.runAsync("delete from gym_measurements where id = ?", [id]);
+  }
+  async getGymImport() {
+    const row = await this.db.getFirstAsync<{ data: string }>("select data from gym_import where id = 1");
+    return parse<GymImportState>(row?.data ?? null);
+  }
+  async putGymImport(state: GymImportState) {
+    await this.db.runAsync("insert or replace into gym_import (id, data) values (1, ?)", [json(state)]);
+  }
+
   async clearAll() {
     await this.tx(async (db) => {
       for (const t of TABLES) await db.runAsync(`delete from ${t}`);
     });
   }
+  async clearGym() {
+    await this.tx(async (db) => {
+      for (const t of GYM_TABLES) await db.runAsync(`delete from ${t}`);
+    });
+  }
 }
+
+
+// ── the gym log's row shapes ─────────────────────────────────────────────────────────────────────────────────────────
+type GymExerciseRow = { id: string; name: string; body_part: string; equipment: string; custom: number; hold: number; unit: string; note: string | null };
+type GymRoutineRow = { id: string; name: string; notes: string | null; position: number; updated_at: number };
+type GymRoutineItemRow = { routine_id: string; exercise_id: string; position: number; sets: number; reps: number; rest_sec: number | null; note: string | null };
+type GymSessionRow = {
+  id: string; day: string; start_ts: number; end_ts: number | null; name: string; notes: string | null; routine_id: string | null;
+  finished: number; rest_started_ts: number | null; rest_sec: number | null;
+};
+type GymSetRow = {
+  id: string; session_id: string; exercise_id: string; position: number; set_no: number; weight_kg: number; reps: number;
+  seconds: number | null; distance_m: number | null; rpe: number | null; type: string; superset_id: string | null; completed: number; ts: number | null; note: string | null;
+};
+type GymMeasurementRow = { id: string; day: string; kind: string; value: number };
+
+const gymExerciseOf = (r: GymExerciseRow): GymExercise => ({
+  id: r.id,
+  name: r.name,
+  bodyPart: r.body_part as GymExercise["bodyPart"],
+  equipment: r.equipment as GymExercise["equipment"],
+  custom: r.custom === 1,
+  hold: r.hold === 1,
+  unit: r.unit === "lb" ? "lb" : "kg",
+  note: r.note,
+});
+const gymRoutineOf = (r: GymRoutineRow): GymRoutine => ({ id: r.id, name: r.name, notes: r.notes, position: r.position, updatedAt: r.updated_at });
+const gymRoutineItemOf = (r: GymRoutineItemRow): GymRoutineItem => ({
+  routineId: r.routine_id,
+  exerciseId: r.exercise_id,
+  position: r.position,
+  sets: r.sets,
+  reps: r.reps,
+  restSec: r.rest_sec,
+  note: r.note,
+});
+const gymSessionOf = (r: GymSessionRow): GymSession => ({
+  id: r.id,
+  day: r.day,
+  startTs: r.start_ts,
+  endTs: r.end_ts,
+  name: r.name,
+  notes: r.notes,
+  routineId: r.routine_id,
+  finished: r.finished === 1,
+  restStartedTs: r.rest_started_ts,
+  restSec: r.rest_sec,
+});
+const gymSetOf = (r: GymSetRow): GymSet => ({
+  id: r.id,
+  sessionId: r.session_id,
+  exerciseId: r.exercise_id,
+  position: r.position,
+  setNo: r.set_no,
+  weightKg: r.weight_kg,
+  reps: r.reps,
+  seconds: r.seconds,
+  distanceM: r.distance_m,
+  rpe: r.rpe,
+  type: r.type as SetType,
+  supersetId: r.superset_id,
+  completed: r.completed === 1,
+  ts: r.ts,
+  note: r.note,
+});
+const gymMeasurementOf = (r: GymMeasurementRow): GymMeasurement => ({ id: r.id, day: r.day, kind: r.kind as GymMeasurement["kind"], value: r.value });
+
+/** The gym log's tables, cleared only by "Delete everything": the import is the owner's history, not a source's rows. */
+const GYM_TABLES = ["gym_exercises", "gym_routines", "gym_routine_items", "gym_sessions", "gym_sets", "gym_measurements", "gym_import"];
 
 /** The bucketed sample tables: one row per UTC day of parallel offset and value arrays. */
 type SampleTable = "hr_days" | "steps_days" | "hrv_days";

@@ -23,11 +23,12 @@ import type ui from "./locales/en/ui.json";
 import type coachTools from "./locales/en/coachTools.json";
 import type leetcode from "./locales/en/leetcode.json";
 import type scale from "./locales/en/scale.json";
+import type gym from "./locales/en/gym.json";
 
 declare module "i18next" {
   interface CustomTypeOptions {
     defaultNS: "common";
-    resources: { common: typeof common, reasons: typeof reasons, metrics: typeof metrics, home: typeof home, sleep: typeof sleep, recovery: typeof recovery, strain: typeof strain, health: typeof health, journal: typeof journal, trends: typeof trends, nutrition: typeof nutrition, goals: typeof goals, reports: typeof reports, coach: typeof coach, settings: typeof settings, onboarding: typeof onboarding, more: typeof more, howItWorks: typeof howItWorks, notifications: typeof notifications, errors: typeof errors, ui: typeof ui; coachTools: typeof coachTools; leetcode: typeof leetcode; scale: typeof scale };
+    resources: { common: typeof common, reasons: typeof reasons, metrics: typeof metrics, home: typeof home, sleep: typeof sleep, recovery: typeof recovery, strain: typeof strain, health: typeof health, journal: typeof journal, trends: typeof trends, nutrition: typeof nutrition, goals: typeof goals, reports: typeof reports, coach: typeof coach, settings: typeof settings, onboarding: typeof onboarding, more: typeof more, howItWorks: typeof howItWorks, notifications: typeof notifications, errors: typeof errors, ui: typeof ui; coachTools: typeof coachTools; leetcode: typeof leetcode; scale: typeof scale; gym: typeof gym };
     returnNull: false;
   }
 }

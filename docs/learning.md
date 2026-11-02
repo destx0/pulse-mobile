@@ -930,3 +930,23 @@ The codec and the LeFu `libsl` composition model are pure (`src/health/lefu.ts`)
 A live weigh-in is saved only on the Save tap; stored history frames are written at the scale's timestamp through `logEntry`, deduped against recent Pulse weight entries. Both paths also write the same weight and body fat to Health Connect as Pulse-tagged `Weight`/`BodyFat` records (`src/health/healthRecord.ts`), so Google Fit and other health apps with Health Connect access can read them. A deterministic client record id makes a retry idempotent, and the Scale screen offers the write permission and a retry if it is denied or fails. This is the only Health Connect write Pulse makes; it needs no Google account and no network.
 
 Body composition beyond weight and body fat is display-only for now.
+
+## The gym log: a write per tick, and no file-picker dependency
+
+A workout in progress is a row in SQLite before its first set, and every set is written when it is ticked, not when the
+screen unmounts. That is what makes the session survive Android killing the app: the tracking screen reads the session
+and its sets back on mount, and the rest timer is stored as a start instant plus its length, so a phone that slept
+through the rest comes back to the right countdown. The same rows are what "resume" on the Gym tab points at.
+
+Sets are written one at a time from the screen (a tick is one small write), but the Strong import batches them:
+`putGymSets` runs one transaction per session, because fourteen thousand separate transactions is minutes on a phone
+and one per session is seconds. Long import loops still `await slice()` between sessions.
+
+The Strong export is a CSV with a `;` or `,` delimiter depending on the locale, so the reader decides the delimiter from
+the header once. Note and rest-timer rows carry no weight, reps or time and would be skipped as empty; the parser keeps
+their text on the exercise above them instead. `Duration (sec)` is the workout's length, capped at six hours because a
+timer left running wrote 47-hour workouts in the real export.
+
+Picking the file needs no new package: `expo-file-system` (SDK 57) exports `File.pickFileAsync()` and `File.text()`, so
+`expo-document-picker` is not installed. The picker returns a temporary copy, which is read once and parsed in
+JavaScript; nothing is copied into the app's document directory.

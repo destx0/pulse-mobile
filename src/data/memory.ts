@@ -3,6 +3,7 @@
 // store, as they would not with SQLite.
 import type { DayRange, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
+import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
 import { minuteHr } from "@/core/engine/context";
@@ -111,6 +112,13 @@ export class MemoryStore implements Store {
   private tagSeq = 0;
   private logged = new Map<string, LoggedEntryRow>();
   private records = new Map<string, HealthRecord>();
+  private gymEx = new Map<string, GymExercise>();
+  private gymRoutineMap = new Map<string, GymRoutine>();
+  private gymItems = new Map<string, GymRoutineItem[]>();
+  private gymSessionMap = new Map<string, GymSession>();
+  private gymSetMap = new Map<string, GymSet>();
+  private gymMeasures = new Map<string, GymMeasurement>();
+  private gymImport: GymImportState | null = null;
 
   async getProfile() {
     return this.profile && copy(this.profile);
@@ -360,12 +368,101 @@ export class MemoryStore implements Store {
     this.leetcode.clear();
   }
 
+
+  // ── the gym log ───────────────────────────────────────────────────────────────────────────────────────────────────
+  async gymExercises() {
+    return [...this.gymEx.values()].sort((a, b) => a.name.localeCompare(b.name)).map(copy);
+  }
+  async putGymExercises(rows: GymExercise[]) {
+    for (const r of rows) this.gymEx.set(r.id, copy(r));
+  }
+  async deleteGymExercise(id: string) {
+    this.gymEx.delete(id);
+  }
+  async gymRoutines() {
+    const routines = [...this.gymRoutineMap.values()].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)).map(copy);
+    const items = [...this.gymItems.entries()]
+      .flatMap(([routineId, list]) => list.map((i) => ({ ...copy(i), routineId })))
+      .sort((a, b) => a.routineId.localeCompare(b.routineId) || a.position - b.position);
+    return { routines, items };
+  }
+  async putGymRoutine(routine: GymRoutine, items: GymRoutineItem[]) {
+    this.gymRoutineMap.set(routine.id, copy(routine));
+    this.gymItems.set(routine.id, copy(items));
+  }
+  async deleteGymRoutine(id: string) {
+    this.gymRoutineMap.delete(id);
+    this.gymItems.delete(id);
+  }
+  async gymSessions() {
+    return [...this.gymSessionMap.values()].sort((a, b) => b.startTs - a.startTs).map(copy);
+  }
+  async putGymSession(s: GymSession) {
+    this.gymSessionMap.set(s.id, copy(s));
+  }
+  async deleteGymSession(id: string) {
+    this.gymSessionMap.delete(id);
+    for (const [setId, s] of this.gymSetMap) if (s.sessionId === id) this.gymSetMap.delete(setId);
+  }
+  async gymSets(sessionIds: string[]) {
+    const want = new Set(sessionIds);
+    return [...this.gymSetMap.values()]
+      .filter((s) => want.has(s.sessionId))
+      .sort((a, b) => a.sessionId.localeCompare(b.sessionId) || a.position - b.position || a.setNo - b.setNo)
+      .map(copy);
+  }
+  async gymAllSets() {
+    return [...this.gymSetMap.values()].sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0) || a.position - b.position || a.setNo - b.setNo).map(copy);
+  }
+  async gymExerciseSets(exerciseIds: string[], beforeTs?: number) {
+    const want = new Set(exerciseIds);
+    return [...this.gymSetMap.values()]
+      .filter((s) => want.has(s.exerciseId) && (beforeTs === undefined || (s.ts ?? 0) <= beforeTs))
+      .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0) || a.position - b.position || a.setNo - b.setNo)
+      .map(copy);
+  }
+  async putGymSet(s: GymSet) {
+    this.gymSetMap.set(s.id, copy(s));
+  }
+  async putGymSets(sets: GymSet[]) {
+    for (const s of sets) this.gymSetMap.set(s.id, copy(s));
+  }
+  async deleteGymSet(id: string) {
+    this.gymSetMap.delete(id);
+  }
+  async gymMeasurements() {
+    return [...this.gymMeasures.values()].sort((a, b) => b.day.localeCompare(a.day)).map(copy);
+  }
+  async putGymMeasurement(m: GymMeasurement) {
+    for (const [id, row] of this.gymMeasures) if (row.day === m.day && row.kind === m.kind) this.gymMeasures.delete(id);
+    this.gymMeasures.set(m.id, copy(m));
+  }
+  async deleteGymMeasurement(id: string) {
+    this.gymMeasures.delete(id);
+  }
+  async getGymImport() {
+    return this.gymImport && copy(this.gymImport);
+  }
+  async putGymImport(state: GymImportState) {
+    this.gymImport = copy(state);
+  }
+
   async compactHr(beforeTs: number) {
     return this.hr.compact(beforeTs);
   }
   async reclaimSpace() {}
   async storageBytes() {
     return null;
+  }
+
+  async clearGym() {
+    this.gymEx.clear();
+    this.gymRoutineMap.clear();
+    this.gymItems.clear();
+    this.gymSessionMap.clear();
+    this.gymSetMap.clear();
+    this.gymMeasures.clear();
+    this.gymImport = null;
   }
 
   async clearAll() {

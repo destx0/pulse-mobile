@@ -1,6 +1,7 @@
 // The storage contract every layer talks to: the importer writes rows, the pipeline reads rows and writes scores,
 // the screen queries read both. One implementation on expo-sqlite (db.ts); tests may use an in-memory one.
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
+import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { Stage1Activity, Stage1Day, Stage2Row } from "@/pipeline/types";
 import type { Report } from "@/core/algorithms/reports";
@@ -135,8 +136,50 @@ export interface Store {
   /** Removes every stored LeetCode snapshot (Delete everything). */
   clearLeetCode(): Promise<void>;
 
-  /** Drops every health row (settings › disconnect, or switching demo ↔ Health Connect). LeetCode snapshots stay; reset clears them through clearLeetCode. */
+  /**
+   * Drops every health row (settings › disconnect, or switching demo ↔ Health Connect). LeetCode snapshots and the gym
+   * log stay: the gym is the owner's own writing, not something the source brought, so only reset() clears it.
+   */
   clearAll(): Promise<void>;
+  /** Drops the gym log: sessions, sets, routines, exercises and measurements (Delete everything). */
+  clearGym(): Promise<void>;
+
+  // The gym log (src/core/gym): the owner's own sessions, routines and measurements. Local to the phone: nothing here
+  // goes to Health Connect, and nothing in the health pipeline reads it.
+  /** Every exercise the picker can offer: the catalogue the owner has used, plus the ones they added. */
+  gymExercises(): Promise<GymExercise[]>;
+  /** Inserts or replaces by id (a custom exercise's name or unit may change). */
+  putGymExercises(rows: GymExercise[]): Promise<void>;
+  /** Removes a custom exercise. Sets already logged keep its id and are shown under its last known name. */
+  deleteGymExercise(id: string): Promise<void>;
+  /** Routines and their items, each list in its own order. */
+  gymRoutines(): Promise<{ routines: GymRoutine[]; items: GymRoutineItem[] }>;
+  /** Replaces a routine and every item of it, in one transaction. */
+  putGymRoutine(routine: GymRoutine, items: GymRoutineItem[]): Promise<void>;
+  deleteGymRoutine(id: string): Promise<void>;
+  /** Every session, newest first. */
+  gymSessions(): Promise<GymSession[]>;
+  /** Inserts or replaces one session: a workout in progress writes itself as it goes. */
+  putGymSession(session: GymSession): Promise<void>;
+  /** Removes a session and every set of it. */
+  deleteGymSession(id: string): Promise<void>;
+  /** The sets of the given sessions, ordered by the exercise's slot and the set number. */
+  gymSets(sessionIds: string[]): Promise<GymSet[]>;
+  /** Every set in the log: the records board and the weekly totals. */
+  gymAllSets(): Promise<GymSet[]>;
+  /** Every set of the given exercises up to `beforeTs` (all when it is absent): the previous column and the PR charts. */
+  gymExerciseSets(exerciseIds: string[], beforeTs?: number): Promise<GymSet[]>;
+  /** Inserts or replaces one set. Ticking a set is one write, so a killed app keeps every set already ticked. */
+  putGymSet(set: GymSet): Promise<void>;
+  /** Inserts or replaces many sets in one transaction (an import); the same write as putGymSet, batched. */
+  putGymSets(sets: GymSet[]): Promise<void>;
+  deleteGymSet(id: string): Promise<void>;
+  gymMeasurements(): Promise<GymMeasurement[]>;
+  /** Inserts or replaces one value of one (day, kind). */
+  putGymMeasurement(measurement: GymMeasurement): Promise<void>;
+  deleteGymMeasurement(id: string): Promise<void>;
+  getGymImport(): Promise<GymImportState | null>;
+  putGymImport(state: GymImportState): Promise<void>;
 
   // Upkeep (src/background/maintenance.ts)
   /**
