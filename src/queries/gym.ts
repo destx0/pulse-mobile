@@ -95,6 +95,15 @@ export async function getGymHome(ctx: QueryCtx): Promise<GymHomeVM> {
     };
   });
 
+  // Templates read like a "last used" list: the one trained two days ago first, then last week's, then the ones never
+  // started, in their own saved order.
+  cards.sort((a, b) => {
+    if (a.lastTs && b.lastTs) return b.lastTs - a.lastTs;
+    if (a.lastTs) return -1;
+    if (b.lastTs) return 1;
+    return a.routine.position - b.routine.position;
+  });
+
   const totals = new Map<string, { record: PersonalRecord; name: GymExercise }>();
   for (const [id, record] of recordsOf(all)) totals.set(id, { record, name: map.get(id) ?? ghost(id) });
   const records = [...totals.values()]

@@ -17,7 +17,7 @@ import { usePanelStyle } from "@/ui/Panel";
 import { useTheme } from "@/ui/theme";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
-import { agoShort, DAY, formatDay } from "@/lib/format";
+import { ago, DAY, formatDay } from "@/lib/format";
 import type { RoutineCard, SessionCard } from "@/queries/gym";
 
 /** "0:06", "12:40", "1:02:03": the workout timer. */
@@ -42,11 +42,14 @@ export function volumeText(kg: number): string {
   return `${Math.round(kg).toLocaleString()} kg`;
 }
 
-/** Strong's footer: "6 days ago" for the last week, else the date ("16 Nov 2025"). */
+/** The footer: "4 days ago" for the last month, then the date, with the year once it is not this one ("16 Nov 2025"). */
 export function whenText(ts: number | null, now: number): string {
   if (!ts) return "";
   const days = (now - ts) / 86_400;
-  return days < 7 ? agoShort(ts * 1000, now * 1000) : formatDay(new Date(ts * 1000).toISOString().slice(0, 10), DAY.monthDay);
+  if (days < 30) return ago(ts * 1000, now * 1000);
+  const day = new Date(ts * 1000).toISOString().slice(0, 10);
+  const thisYear = new Date(now * 1000).getUTCFullYear() === Number(day.slice(0, 4));
+  return formatDay(day, thisYear ? DAY.monthDay : DAY.full);
 }
 
 /** A live "now" for the timers, ticking once a second while the screen is open. */
@@ -89,7 +92,7 @@ export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: Routin
   const summary = card.items.map((i) => (i.sets > 0 ? `${i.sets} × ${i.exercise.name}` : i.exercise.name)).join(", ");
   return (
     <>
-      <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "min-h-[132px] flex-1 p-4")}>
+      <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "w-full p-4")}>
         <View className="flex-1 gap-2">
           <View className="flex-row items-start justify-between gap-1">
             <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>

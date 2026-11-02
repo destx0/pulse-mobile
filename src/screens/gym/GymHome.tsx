@@ -96,16 +96,15 @@ export function GymHome() {
             }
           >
             {data.routines.length ? (
-              <View className="flex-row flex-wrap justify-between gap-y-3">
+              <View className="gap-3">
                 {data.routines.map((card) => (
-                  <View key={card.routine.id} className="w-[48.5%]">
-                    <TemplateCard
-                      card={card}
-                      onStart={() => void start(card.routine.id)}
-                      onEdit={() => push(`/gym/routine/${card.routine.id}`)}
-                      onDelete={() => setRemoving({ id: card.routine.id, name: card.routine.name })}
-                    />
-                  </View>
+                  <TemplateCard
+                    key={card.routine.id}
+                    card={card}
+                    onStart={() => void start(card.routine.id)}
+                    onEdit={() => push(`/gym/routine/${card.routine.id}`)}
+                    onDelete={() => setRemoving({ id: card.routine.id, name: card.routine.name })}
+                  />
                 ))}
               </View>
             ) : (
