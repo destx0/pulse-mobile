@@ -28,6 +28,9 @@ Expo ships breaking changes every SDK release. APIs you remember are likely rena
 | `npx expo export --platform android --output-dir <tmp dir>` | Bundle check: Metro builds the Android bundle. Use a directory outside the repo and delete it after |
 | `npx eas-cli@latest build --profile development` | Cloud development build (profiles in `eas.json`: `development`, `preview`, `production`) |
 
+**EAS auth.** The Expo/EAS access token is in `.env` as `EXPO_KEY` (quoted). For a signed local or cloud build, export it
+as `EXPO_TOKEN` in that shell only: `EXPO_TOKEN="$(...)" npx eas-cli@latest build ...`. Never print, commit or log it.
+
 Run `pnpm typecheck && pnpm lint && pnpm test` before every commit. Run the bundle check when you change `babel.config.js`, `metro.config.js`, `app.json`, or add a dependency.
 
 ## Layout
