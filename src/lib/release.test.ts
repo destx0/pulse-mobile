@@ -4,7 +4,7 @@ import { apkFor, isNewer, parseRelease } from "./release";
 const asset = (name: string) => ({ name, browser_download_url: `https://github.com/x/releases/download/v0.4.0/${name}` });
 const LATEST = {
   tag_name: "v0.4.0",
-  html_url: "https://github.com/adityaongit/pulse-mobile/releases/tag/v0.4.0",
+  html_url: "https://github.com/destx0/pulse-mobile/releases/tag/v0.4.0",
   assets: [asset("pulse-mobile-0.4.0-arm64.apk"), asset("pulse-mobile-0.4.0-armv7.apk"), asset("pulse-mobile-0.4.0-x86_64.apk"), asset("notes.txt")],
 };
 

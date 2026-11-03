@@ -10,7 +10,7 @@ import { Text } from "@/ui/Text";
 import { cn } from "@/ui/cn";
 import { BODY, ROW, ROW_RULE } from "../settings/controls";
 
-export const REPO_URL = "https://github.com/adityaongit/pulse";
+export const REPO_URL = "https://github.com/destx0/pulse";
 
 export function About({ version, scoringVersion }: { version: string; scoringVersion: number }) {
   const { t } = useTranslation("more");

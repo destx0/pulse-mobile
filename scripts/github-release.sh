@@ -3,7 +3,7 @@
 # usage: scripts/github-release.sh <version> <apk>...
 # Creates the release v<version>, titled "Pulse Mobile <version>", on HEAD (or reuses it if it exists) and uploads each
 # APK as an asset, named as the file is (pulse-mobile-<version>-<abi>.apk). <version> must be app.json's expo.version.
-# The token is $GH_TOKEN (~/.zshrc sets it to adityaongit's under ~/personal/; $GITHUB_TOKEN there is the work
+# The token is $GH_TOKEN (~/.zshrc sets it to destx0's under ~/personal/; $GITHUB_TOKEN there is the work
 # account's, so it is not used), else the github.com password git's credential helper holds.
 set -euo pipefail
 REPO=${GH_REPO:-$(git remote get-url origin | sed -E 's#(git@|https://)github.com[:/]([^/]+/[^/.]+)(\.git)?#\2#')}

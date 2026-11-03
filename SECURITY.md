@@ -5,7 +5,7 @@ Pulse Mobile holds health data on the phone, so security reports are taken serio
 ## Reporting a vulnerability
 
 Report it privately through GitHub: **Security › Report a vulnerability** on this repository, or open
-<https://github.com/adityaongit/pulse-mobile/security/advisories/new>. Please do not open a public issue,
+<https://github.com/destx0/pulse-mobile/security/advisories/new>. Please do not open a public issue,
 discussion or pull request for a vulnerability.
 
 Include what you found, how to reproduce it (with demo data where possible), and the impact you see. Never send

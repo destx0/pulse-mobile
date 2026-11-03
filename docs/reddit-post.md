@@ -44,8 +44,8 @@ few things to know before you install:
 - obviously not medical advice, it's just math on your own data
 
 links:
-- android app: https://github.com/adityaongit/pulse-mobile
-- apk: https://github.com/adityaongit/pulse-mobile/releases/latest (grab the arm64 one, it works on pretty much every phone)
-- the web version (still there if you want it on a server): https://github.com/adityaongit/pulse
+- android app: https://github.com/destx0/pulse-mobile
+- apk: https://github.com/destx0/pulse-mobile/releases/latest (grab the arm64 one, it works on pretty much every phone)
+- the web version (still there if you want it on a server): https://github.com/destx0/pulse
 
 if you try it please tell me what's off, which score feels wrong, what's missing, anything. issues on github are the best place but comments here work too. and a star on the repo helps a lot 🙏

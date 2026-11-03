@@ -12,7 +12,7 @@ import { apkFor, isNewer, parseRelease, type Release } from "@/lib/release";
 import { APP_VERSION } from "@/queries/settings";
 
 /** GitHub's latest-release endpoint for Pulse's repository. */
-export const RELEASES_URL = "https://api.github.com/repos/adityaongit/pulse-mobile/releases/latest";
+export const RELEASES_URL = "https://api.github.com/repos/destx0/pulse-mobile/releases/latest";
 
 const CHECK_EVERY_MS = 24 * 60 * 60 * 1000;
 const TIMEOUT_MS = 15_000;

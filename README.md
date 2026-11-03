@@ -8,8 +8,8 @@
 
 No server, no account, no cloud: Pulse reads your Fitbit data from Health Connect and keeps every byte on the phone.
 
-[![CI](https://github.com/adityaongit/pulse-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/adityaongit/pulse-mobile/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/adityaongit/pulse-mobile?label=release)](https://github.com/adityaongit/pulse-mobile/releases/latest)
+[![CI](https://github.com/destx0/pulse-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/destx0/pulse-mobile/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/destx0/pulse-mobile?label=release)](https://github.com/destx0/pulse-mobile/releases/latest)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
 </div>
@@ -18,12 +18,12 @@ No server, no account, no cloud: Pulse reads your Fitbit data from Health Connec
 
 <div align="center">
 
-<a href="https://github.com/adityaongit/pulse-mobile/releases/latest"><img src="assets/badges/android.svg" alt="Available on Android" height="56"></a>
+<a href="https://github.com/destx0/pulse-mobile/releases/latest"><img src="assets/badges/android.svg" alt="Available on Android" height="56"></a>
 
-Grab `pulse-mobile-<version>-arm64.apk` from the [latest release](https://github.com/adityaongit/pulse-mobile/releases/latest). Sideloading asks you to allow
+Grab `pulse-mobile-<version>-arm64.apk` from the [latest release](https://github.com/destx0/pulse-mobile/releases/latest). Sideloading asks you to allow
 "Install unknown apps" for whichever app you download it with.
 
-Want it on a server instead, for the browser and several people? See [Pulse](https://github.com/adityaongit/pulse).
+Want it on a server instead, for the browser and several people? See [Pulse](https://github.com/destx0/pulse).
 
 </div>
 
@@ -54,7 +54,7 @@ On first open, allow every Health Connect permission, including past data: Pulse
 ## Build from source
 
 ```sh
-git clone https://github.com/adityaongit/pulse-mobile.git && cd pulse-mobile
+git clone https://github.com/destx0/pulse-mobile.git && cd pulse-mobile
 pnpm install && pnpm android
 ```
 
