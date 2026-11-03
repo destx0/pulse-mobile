@@ -53,6 +53,11 @@ export interface Store {
   /** Days whose intraday samples changed since the pipeline last ran (stage 1 reruns them). */
   markIntradayDirty(days: string[]): Promise<void>;
   takeIntradayDirty(): Promise<string[]>;
+  /**
+   * Whether a sync that found nothing new still has to score: `today` has no row at the current scoring version, an
+   * older row does, or a day is marked intraday-dirty (a live heart-rate read or a journal answer).
+   */
+  needsScoring(today: string, scoringVersion: number): Promise<boolean>;
 
   // Reads
   allMetrics(): Promise<Metrics[]>;
@@ -73,6 +78,11 @@ export interface Store {
   // Scores (JSON blobs per day, the pipeline's memo and the screens' source)
   getScores(day: string): Promise<ScoreRow | null>;
   scoresIn(range: DayRange): Promise<ScoreRow[]>;
+  /**
+   * The wear streak's fields of each score row in `range` (a day is worn with any heart rate), read without parsing the
+   * day's other JSON columns: the streak is a 400-day look-back and only needs these three numbers.
+   */
+  wornDays(range: DayRange): Promise<{ day: string; hrCount: number; hrMinutesAm: number; hrMinutesPm: number }[]>;
   putScores(row: ScoreRow): Promise<void>;
   getSeries(day: string, kind: SeriesKind): Promise<(number | null)[] | null>;
   /** An empty `data` removes the series (a day with no Energy Bank curve), so getSeries returns null for it. */

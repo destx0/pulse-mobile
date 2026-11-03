@@ -7,12 +7,14 @@ import { i18n } from "@/i18n/config";
 // body (runSync); boot registers the Store for the task and starts the background (src/background/startup.ts).
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
-import { AppState } from "react-native";
-import { markUiRuntime, registerAppStore, runSync, type Source } from "@/background/runSync";
+import { InteractionManager, AppState } from "react-native";
+import { markUiRuntime, registerAppStore, runSync, WAIT_FOR_TASK_MS, type Source } from "@/background/runSync";
+import { releaseLock, takeLock, waitForLock } from "@/background/lock";
 import { cancelRest } from "@/background/notify";
 import { startBackground } from "@/background/startup";
+import { resetCoachState } from "@/coach/reset";
 import { deleteAllPhotos, deletePhoto } from "@/actions/photo";
-import { openStore } from "@/data/db";
+import { DB_NAME, DEMO_DB, openStore } from "@/data/db";
 import { memoStore } from "@/data/memo";
 import { seedDemo } from "@/data/seed";
 import type { Store } from "@/data/store";
@@ -27,6 +29,8 @@ import { localDay } from "@/lib/time";
 import { initLeetCode, leetcodeForeground, resetLeetCode } from "./leetcode";
 import type { DisplayPrefs } from "@/lib/units";
 import type { QueryCtx } from "@/queries/ctx";
+import type { DayRow } from "@/queries/common";
+import { clearScreenCache } from "@/screens/screenCache";
 import { ensureDefaultTags } from "@/queries/journal";
 import { applyDisplay } from "./display";
 import { checkForUpdate } from "./update";
@@ -98,31 +102,104 @@ export const appState = () => state;
 // Bumped after every scoring run and every write a screen reads (a check-in, a log entry, the dashboard): every
 // mounted screen's query reloads (src/screens/useScreen.ts).
 
+/**
+ * What a write can change. Scores only move when the pipeline runs (or the profile/source does), so a log, a gym set or
+ * a journal answer must not throw away the parsed score rows: it bumps the screen version, not the scores one.
+ */
+export type DataScope = "scores" | "logs" | "journal" | "gym" | "display";
+
 let version = 0;
+let scoresVersion = 0;
 const versionListeners = new Set<() => void>();
-export function dataChanged() {
+const scoresListeners = new Set<() => void>();
+/** Bumps every screen's query. `scores` also bumps the score cache; the other scopes leave it alone. */
+export function dataChanged(scope: DataScope = "scores") {
   version++;
   for (const l of versionListeners) l();
+  if (scope !== "scores") return;
+  scoresVersion++;
+  for (const l of scoresListeners) l();
 }
 const subscribeVersion = (l: () => void) => {
   versionListeners.add(l);
   return () => versionListeners.delete(l);
 };
+const subscribeScores = (l: () => void) => {
+  scoresListeners.add(l);
+  return () => scoresListeners.delete(l);
+};
 const inactiveSubscribe = () => () => {};
 export const dataVersion = () => version;
+export const scoresDataVersion = () => scoresVersion;
 export const useDataVersion = (active = true) => useSyncExternalStore(active ? subscribeVersion : inactiveSubscribe, dataVersion);
+/** The versions that can change a score: the header's streak and the score cache follow this, not every log. */
+export const useScoresVersion = (active = true) => useSyncExternalStore(active ? subscribeScores : inactiveSubscribe, scoresDataVersion);
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
 /** The screens' reads, memoised per data version (src/data/memo.ts); made from the Store on first use. */
 let readStore: Store | null = null;
+/** loadDays results for the current data version, so two queries on one screen build the rows once. */
+let dayReads: { version: number; map: Map<string, Promise<Map<string, DayRow>>> } | null = null;
 
 /** The context the queries take. Throws `profile_missing` before onboarding (the root layout shows onboarding then). */
 export function queryCtx(nowS = Math.floor(Date.now() / 1000)): QueryCtx {
   const { store, profile, sync } = state;
   if (!store || !profile) throw new Error("profile_missing");
-  readStore ??= memoStore(store, dataVersion);
-  return { store: readStore, profile, timeZone: profile.timeZone, today: localDay(nowS, profile.timeZone), now: nowS, sync };
+  readStore ??= memoStore(store, dataVersion, scoresDataVersion);
+  const v = dataVersion();
+  if (!dayReads || dayReads.version !== v) dayReads = { version: v, map: new Map() };
+  return { store: readStore, profile, timeZone: profile.timeZone, today: localDay(nowS, profile.timeZone), now: nowS, sync, days: dayReads.map };
+}
+
+/** Switches the open Store (the person's ↔ the sample one) and drops every cache built from the old one. */
+function swapStore(store: Store, profile: Profile | null, source: Source | null, sync: SyncState) {
+  cancelScheduledRun();
+  readStore = null;
+  dayReads = null;
+  registerAppStore(store);
+  patch({ store, profile, source, sync });
+  // Every keyed result belongs to the old database: drop it, then make the screens read the new one.
+  clearScreenCache();
+  dataChanged("scores");
+  // LeetCode is independent of the health source; the sample database has its own copy of the snapshot.
+  void initLeetCode(store, true);
+}
+
+/** Runs `fn` when the JS thread is idle; a phone that never idles still runs it before the timeout. */
+function afterIdle(fn: () => void, timeout = 3000): void {
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+  if (idle) idle(fn, { timeout });
+  else setTimeout(fn, 800);
+}
+
+let runTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Starts a launch or foreground run after the first screen has painted and its transition has ended. A run is 12 ms
+ * slices of the JS thread; starting it while Home is mounting made the first scroll compete with it.
+ */
+function scheduleRun(delay = 900): void {
+  if (runTimer) return;
+  runTimer = setTimeout(() => {
+    runTimer = null;
+    InteractionManager.runAfterInteractions(() => void run());
+  }, delay);
+}
+function cancelScheduledRun(): void {
+  if (runTimer) clearTimeout(runTimer);
+  runTimer = null;
+}
+
+/** Keeps a background run out while a store switch or a wipe rewrites the database. Throws if the task holds it too long. */
+async function withRunLock<T>(fn: () => Promise<T>): Promise<T> {
+  let lock = await takeLock("app");
+  if (!lock.taken && (await waitForLock("app", WAIT_FOR_TASK_MS))) lock = await takeLock("app");
+  if (!lock.taken) throw new Error("sync_busy");
+  try {
+    return await fn();
+  } finally {
+    await releaseLock("app");
+  }
 }
 
 /** What the actions (src/actions) need: the Store, the profile and its zone. */
@@ -144,22 +221,29 @@ export function appStore(): Store {
 let running: Promise<void> | null = null;
 export const isSyncing = () => running !== null;
 
-/** Import (Health Connect) and score. Serialised: a second call joins the first. */
-function run(): Promise<void> {
-  if (running) return running;
+/**
+ * Import (Health Connect) and score. Serialised: a second call joins the first. `force` scores even when the import
+ * found nothing new (a profile edit, Sync now, a source switch); the boot and foreground runs do not force.
+ */
+function run(force = false): Promise<void> {
+  // A forced run asked for while another runs waits for it and then scores.
+  if (running) return force ? running.then(() => run(true)) : running;
   const { store, profile, source } = state;
   if (!store || !profile || !source) return Promise.resolve();
   const job = (async () => {
     patch({ status: "syncing", error: null });
+    let changed = true;
     try {
       const r = await runSync(store, profile, source, {
         timeZone: profile.timeZone,
         owner: "app",
         waitIfLocked: true,
+        force,
         onProgress: (step, done, total) => patch({ progress: { step, done, total } }),
       });
       if (r.warnings.length) console.log("[sync]", r.warnings.join("; "));
       if (!r.ran) console.log("[run] skipped:", r.skipped);
+      changed = r.scored === true;
       const sync = await store.getSyncState();
       patch({ status: "ready", progress: null, sync, warnings: r.ran && !r.unchanged ? r.warnings : state.warnings, onboarded: true });
     } catch (e) {
@@ -171,7 +255,8 @@ function run(): Promise<void> {
       patch({ status: usable ? "ready" : "error", error: message, progress: null, sync, onboarded: usable });
     } finally {
       running = null;
-      dataChanged();
+      // An unchanged import that skipped scoring changed nothing: no screen has to reload.
+      if (changed) dataChanged("scores");
     }
   })();
   running = job;
@@ -186,17 +271,31 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
   if (booted) return;
   booted = true;
   try {
-    await applyLanguage(await readChoice());
-    const st = await openStore();
+    // The source decides which database to open: the person's own or the sample one. It is read with the language,
+    // before the store, so the demo never opens over the real rows (src/data/db.ts DEMO_DB).
+    const [choice, source] = await Promise.all([
+      readChoice(),
+      AsyncStorage.getItem(SOURCE_KEY).catch(() => null) as Promise<Source | null>,
+    ]);
+    await applyLanguage(choice);
+    let st = await openStore(source === "demo" ? DEMO_DB : DB_NAME);
+    let profile = await st.getProfile();
+    if (source === "demo" && !profile) {
+      // A build before DEMO_DB kept the sample rows in the person's database. Open that one until the next Explore or
+      // Connect, so an update does not send a sample-data session to onboarding.
+      const legacy = await openStore(DB_NAME);
+      const legacyProfile = await legacy.getProfile();
+      if (legacyProfile) {
+        st = legacy;
+        profile = legacyProfile;
+      }
+    }
     // The background task reuses this connection when it fires while the app is up; the task registration and the
     // check-in reminder are made to match the saved settings.
     registerAppStore(st);
-    void startBackground();
     // This runtime has a screen: its syncs slice their work so taps and frames get through (src/lib/yield.ts).
     markUiRuntime();
-    const [profile, source, sync, avail, theme] = await Promise.all([
-      st.getProfile(),
-      AsyncStorage.getItem(SOURCE_KEY).catch(() => null) as Promise<Source | null>,
+    const [sync, avail, theme] = await Promise.all([
       st.getSyncState(),
       availability().catch((): Availability => "unavailable"),
       AsyncStorage.getItem(THEME_KEY).catch(() => null),
@@ -204,23 +303,36 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
     if (theme) applyTheme(theme);
     patch({ theme: theme === "light" || theme === "dark" ? theme : "system" });
     patch({ store: st, profile, source, sync, availability: avail });
-    // LeetCode is independent of the health source: open its last snapshot (if any) while the health import starts.
-    void initLeetCode(st);
     watchForeground();
-    void checkForUpdate();
+    // None of these is needed for the first screen: the background registration, the release check and the LeetCode
+    // snapshot load after it has painted (they read storage, notifications and the network).
+    afterIdle(() => {
+      void startBackground();
+      // A source switch inside the idle window has already loaded the other store's snapshot.
+      if (state.store === st) void initLeetCode(st);
+      void checkForUpdate();
+    });
     if (!profile) return patch({ status: "needs_profile" });
     if (!source) return patch({ status: "needs_permissions" });
     if (source === "health_connect") {
       const perms = await permissionState().catch(() => null);
       if (!perms || perms.granted.length === 0) return patch({ status: "needs_permissions" });
     }
-    // Show the last scores at once; refresh in the background.
+    // Show the last scores at once; refresh once the first screen is up and the opening is over.
     const onboarded = sync.lastSyncTs !== null || source === "demo";
     patch({ status: onboarded ? "ready" : "syncing", onboarded });
-    void run();
+    scheduleRun(1200);
   } catch (e) {
     patch({ status: "error", error: e instanceof Error ? e.message : String(e) });
   }
+}
+
+/** A boot that failed before the store opened (a lock from a background sync, typically) can be tried again in place. */
+export async function retryBoot(applyTheme: (theme: string) => void): Promise<void> {
+  if (state.store) return;
+  booted = false;
+  patch({ status: "booting", error: null });
+  await boot(applyTheme);
 }
 
 function watchForeground() {
@@ -232,7 +344,7 @@ function watchForeground() {
     }
     const away = backgroundAt === null ? 0 : Date.now() - backgroundAt;
     backgroundAt = null;
-    if (away > RESYNC_AWAY_MS && state.onboarded) void run();
+    if (away > RESYNC_AWAY_MS && state.onboarded) scheduleRun(800);
     // LeetCode is throttled separately (10 minutes): a connected profile catches up when the app comes back.
     leetcodeForeground();
     // Android lets the person change Pulse's language in the system settings while it runs: "Phone's language" follows it.
@@ -252,7 +364,7 @@ export async function saveProfile(p: Profile): Promise<void> {
   if (!profile) await ensureDefaultTags(store);
   patch({ profile: p, status: source ? "syncing" : "needs_permissions" });
   dataChanged();
-  if (source) void run();
+  if (source) void run(true);
 }
 
 /** Sets or removes the profile photo (src/actions/photo.ts). No rescore: the photo is only shown. The old file goes. */
@@ -275,7 +387,7 @@ export async function setDisplay(display: DisplayPrefs): Promise<void> {
   const p = { ...profile, display };
   await store.setProfile(p);
   patch({ profile: p });
-  dataChanged();
+  dataChanged("display");
 }
 
 /** Starts i18next and the formatters' locale in what `choice` means (the phone's language for "auto"). */
@@ -291,7 +403,7 @@ async function followPhoneLanguage(): Promise<void> {
   const language = resolveChoice("auto");
   if (language === i18n.language) return;
   await applyLanguage("auto");
-  dataChanged();
+  dataChanged("display");
 }
 
 /** Sets the language (Settings › App), kept on the device. No rescore: scores are numbers; every cached view model is rebuilt. */
@@ -300,32 +412,40 @@ export async function setLanguage(choice: LanguageChoice): Promise<void> {
   // new choice) but is not waited for: the screens switch at once.
   const saved = saveChoice(choice);
   await applyLanguage(choice);
-  dataChanged();
+  dataChanged("display");
   await saved;
 }
 
-/** "Explore with sample data": halo's demo person, 180 days, no Health Connect needed. */
+/**
+ * "Explore with sample data": halo's demo person, 180 days, in the sample database (DEMO_DB). The person's own
+ * database is never opened or cleared, so their journal, logs, gym and profile are exactly as they left them when they
+ * switch back.
+ */
 export async function exploreSample(): Promise<void> {
-  const { store, profile, source } = state;
+  const { store, profile } = state;
   if (!store) return;
   patch({ status: "syncing", error: null, progress: { step: i18n.t("errors:state.generatingSample"), done: 0, total: 1 } });
+  let demoStore: Store | null = null;
   try {
-    // The demo data belongs to a demo person with their own profile; keep the person's own to restore later.
-    if (profile && source !== "demo") await AsyncStorage.setItem(OWN_PROFILE_KEY, JSON.stringify(profile));
-    await store.clearAll();
-    await forgetChanges();
+    if (running) await running.catch(() => {});
+    demoStore = await openStore(DEMO_DB);
     const timeZone = profile?.timeZone ?? deviceTimeZone();
     const today = localDay(Date.now() / 1000, timeZone);
-    const demo = await seedDemo(store, { today, timeZone });
-    await seedDemoFood(store, { today, timeZone, now: Math.floor(Date.now() / 1000) });
-    await ensureDefaultTags(store);
+    const demo = await withRunLock(async () => {
+      await demoStore!.clearAll();
+      await demoStore!.clearGym();
+      const seeded = await seedDemo(demoStore!, { today, timeZone });
+      await seedDemoFood(demoStore!, { today, timeZone, now: Math.floor(Date.now() / 1000) });
+      await ensureDefaultTags(demoStore!);
+      return seeded;
+    });
     await AsyncStorage.setItem(SOURCE_KEY, "demo");
-    patch({ profile: demo, source: "demo" });
+    swapStore(demoStore, demo, "demo", await demoStore.getSyncState());
   } catch (e) {
     patch({ status: "error", error: e instanceof Error ? e.message : String(e), progress: null });
     throw e;
   }
-  await run();
+  await run(true);
 }
 
 /**
@@ -341,48 +461,99 @@ export async function connectHealth(): Promise<PermissionState | null> {
     patch({ error: i18n.t("errors:state.permissionsDenied") });
     return perms;
   }
+  // A run may still be importing or scoring the current store; the switch must not clear a database under it.
+  if (running) await running.catch(() => {});
   let profile = state.profile;
+  let next = store;
   if (state.source === "demo") {
-    const own = await AsyncStorage.getItem(OWN_PROFILE_KEY).catch(() => null);
-    await store.clearAll();
-    await AsyncStorage.removeItem(OWN_PROFILE_KEY).catch(() => {});
-    profile = own ? (JSON.parse(own) as Profile) : null;
-    if (profile) {
-      await store.setProfile(profile);
-      await ensureDefaultTags(store);
+    // Leave the sample database: the person's own is untouched, so its profile (and journal, logs and gym) is what
+    // comes back. OWN_PROFILE_KEY is the one-release fallback for a build before DEMO_DB, where the sample rows lived in
+    // this database; when it names a different person, the sample rows are cleared before the profile is restored.
+    next = await openStore(DB_NAME);
+    const current = await next.getProfile();
+    profile = current;
+    const saved = await AsyncStorage.getItem(OWN_PROFILE_KEY).catch(() => null);
+    if (saved) {
+      let own: Profile | null = null;
+      try {
+        own = JSON.parse(saved) as Profile;
+      } catch {
+        own = null;
+      }
+      if (own) {
+        if (!current || current.birthDate !== own.birthDate) {
+          await withRunLock(async () => {
+            await next.clearAll();
+            await next.setProfile(own!);
+            await ensureDefaultTags(next);
+          });
+        }
+        profile = own;
+      }
     }
+    await AsyncStorage.removeItem(OWN_PROFILE_KEY).catch(() => {});
   }
   await AsyncStorage.setItem(SOURCE_KEY, "health_connect");
-  patch({ profile, source: "health_connect", error: null, sync: await store.getSyncState(), onboarded: false, status: profile ? "syncing" : "needs_profile" });
+  if (next !== store) swapStore(next, profile, "health_connect", await next.getSyncState());
+  else patch({ profile, source: "health_connect", error: null, sync: await store.getSyncState() });
+  patch({ status: profile ? "syncing" : "needs_profile", onboarded: false });
   dataChanged();
-  if (profile) await run();
+  if (profile) await run(true);
   return perms;
 }
 
 /** Re-imports recent days and rescores (Sync now, pull to sync). Joins a run in flight. */
-export const refresh = (): Promise<void> => run();
+export const refresh = (): Promise<void> => run(true);
 
 /** Re-reads the whole history window from Health Connect (for data an app shared late), then rescores. */
 export async function reimport(): Promise<void> {
   if (state.source === "health_connect") await forgetChanges();
-  await run();
+  await run(true);
 }
 
-/** Deletes every row and setting: the app starts again at onboarding. */
+/**
+ * The preferences "Delete everything" clears. They are literals because each owner module keeps its own key; the
+ * SecureStore coach key and LeetCode's username go through their own helpers below. A key that is not there is a no-op.
+ */
+const PREFERENCES = [
+  SOURCE_KEY, OWN_PROFILE_KEY, THEME_KEY,
+  "pulse.background.settings", "pulse.background.log", "pulse.background.lock",
+  "pulse.ble.autoConnect", "pulse.ble.device", "pulse.ble.stopped",
+  "pulse.breathe.haptics", "pulse.breathe.log",
+  "pulse.coach.setup",
+  "pulse.dashboard", "pulse.goals",
+  "pulse.home.insights.dismissed", "pulse.journal.yesterdayOffered",
+  "pulse.language",
+  "pulse.lefu.athlete", "pulse.lefu.device",
+  "pulse.notifications.markers", "pulse.notify.recovery", "pulse.notify.syncProblem",
+  "pulse.nutrition.targets", "pulse.opening.seen",
+  "pulse.update", "pulse.update.check",
+  "pulse.weeklyPlan",
+  "pulse.workout.haptics", "pulse.workout.log",
+];
+
+/** Deletes every row and setting, from both databases: the app starts again at onboarding. */
 export async function reset(): Promise<void> {
-  const { store } = state;
   if (running) await running.catch(() => {});
-  if (store) {
-    await store.clearAll();
-    await store.clearGym();
-  }
+  // Wipe the person's database and the sample one, so a later "Explore with sample data" starts clean too.
+  const real = await openStore(DB_NAME);
+  const demo = await openStore(DEMO_DB);
+  await withRunLock(async () => {
+    for (const store of [real, demo]) {
+      await store.clearAll();
+      await store.clearGym();
+      // clearAll keeps the coach's chats (they are not health rows); "Delete everything" must not.
+      await resetCoachState(store);
+    }
+  });
   // A rest countdown belongs to the gym that was just deleted; it must not fire into a missing session.
   await cancelRest();
   await resetLeetCode();
   deleteAllPhotos();
-  await AsyncStorage.multiRemove([SOURCE_KEY, OWN_PROFILE_KEY]).catch(() => {});
+  await AsyncStorage.multiRemove(PREFERENCES).catch(() => {});
   await forgetChanges();
-  patch({ status: "needs_profile", profile: null, source: null, sync: EMPTY_SYNC, error: null, warnings: [], onboarded: false });
+  swapStore(real, null, null, EMPTY_SYNC);
+  patch({ status: "needs_profile", profile: null, source: null, sync: EMPTY_SYNC, error: null, warnings: [], onboarded: false, theme: "system" });
   dataChanged();
 }
 

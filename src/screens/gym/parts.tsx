@@ -54,12 +54,15 @@ export function whenText(ts: number | null, now: number): string {
   return formatDay(day, thisYear ? DAY.monthDay : DAY.full);
 }
 
-/** A live "now" for the timers, ticking once a second while the screen is open. */
+/** A live "now" for the timers, ticking once a second while `active`. It reads the clock again the moment it becomes
+ *  active, so a timer that was hidden under another page does not show its last value for a second. */
 export function useNow(active = true): number {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    const tick = () => setNow(Math.floor(Date.now() / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [active]);
   return now;

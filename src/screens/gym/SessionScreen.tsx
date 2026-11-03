@@ -1,22 +1,23 @@
 // The tracking screen `/gym/session/[id]`: Strong's workout page. One card per exercise, a row per set with the last
-// time's numbers beside the weight and reps, a tick at the end of each row, and the rest timer floating above the list.
-// Every tick and every edit is its own write, so a killed app comes back to the same workout.
+// time's numbers beside the weight and reps, a tick at the end of each row, and (when a session still carries one) the
+// rest timer floating above the list. Every tick and every edit is its own write, so a killed app comes back to the
+// same workout.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useIsFocused } from "expo-router";
 import { ArrowDown, ArrowUp, Check, Clock, Copy, Dumbbell, History, MoreHorizontal, NotebookPen, Plus, Scale, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
-import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, startRest, stopRest, updateSession } from "@/actions/gym";
+import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, stopRest, updateSession } from "@/actions/gym";
 import { cancelRest, scheduleRest } from "@/background/notify";
 import { fromUnit, loadText } from "@/core/gym/load";
 import { isWorkSet } from "@/core/gym/stats";
-import type { GymExercise, GymSession, GymSet, SetType } from "@/core/gym/types";
+import type { GymExercise, GymSet, SetType } from "@/core/gym/types";
 import type { Block } from "@/queries/gym";
-import { getGymSession } from "@/queries/gym";
-import { useScreen } from "@/screens/useScreen";
+import { getGymPicker, getGymSession } from "@/queries/gym";
+import { prefetch, useScreen } from "@/screens/useScreen";
 import { i18n } from "@/i18n/config";
 import { Button } from "@/ui/Button";
 import { Card, CardFill, useCardStyle } from "@/ui/Card";
@@ -33,42 +34,50 @@ import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
 import { useTheme } from "@/ui/theme";
 import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText, whenText } from "./parts";
-
-/** The rest a ticked set starts, in seconds. Strong's default; a routine's own rest is not carried yet. */
-const DEFAULT_REST = 90;
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation("gym");
-  const { data } = useScreen((ctx) => getGymSession(ctx, id), ["gym-session", id]);
+  // Opened to be used: the read starts at mount, not after the slide ends, and a card that opens it prefetches it.
+  const { data, error, reload } = useScreen((ctx) => getGymSession(ctx, id), ["gym-session", id], { eager: true });
   const vm = data;
-  const now = useNow();
   const [confirm, setConfirm] = useState<"finish" | "discard" | "delete" | null>(null);
+  // When the finish dialog opened: its body says how long the workout has run, and it need not tick while it waits.
+  const [confirmAt, setConfirmAt] = useState(0);
   const [rename, setRename] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
-  const notifyWarned = useRef(false);
   // The rows an Undo has just put back: they pulse once, so the eye finds where they landed.
   const [flash, setFlash] = useState<{ ids: string[]; at: number } | null>(null);
   const flashAt = useRef(0);
   const flashRows = (sets: GymSet[]) => setFlash({ ids: sets.map((s) => s.id), at: ++flashAt.current });
   const { ref: menuRef, anchor, open: openMenu, close: closeMenu } = useMenu();
 
+  // The rest bar reads the session, or this between a ±15 and the row that records it: the countdown appears in the
+  // same frame as the tap. `null` hides it (Skip); `undefined` follows the session. A tick no longer starts one.
+  const [restOverride, setRestOverride] = useState<{ startedTs: number; sec: number } | null | undefined>(undefined);
   const current = vm?.session ?? null;
-  const restLeft = current?.restStartedTs && current.restSec ? Math.max(0, current.restStartedTs + current.restSec - now) : 0;
-  // A rest that ends while the screen is open gets a haptic; a skip clears restStartedTs first, so it stays silent.
-  const wasResting = useRef(false);
-  useEffect(() => {
-    if (restLeft > 0) {
-      wasResting.current = true;
-      return;
-    }
-    if (!wasResting.current) return;
-    wasResting.current = false;
-    if (current?.restStartedTs) {
-      haptic.success();
-      void cancelRest();
-    }
-  }, [restLeft, current?.restStartedTs]);
+  const sessionRest = current?.restStartedTs && current.restSec ? { startedTs: current.restStartedTs, sec: current.restSec } : null;
+  const rest = restOverride !== undefined ? restOverride : sessionRest;
+  const nowS = () => Math.floor(Date.now() / 1000);
+  // Which rest the screen is on: an adjustment's write can finish after the rest was skipped, and its late notification
+  // must not replace the current one.
+  const restSeq = useRef(0);
+  // Every write this page starts, so Finish and Discard can wait for the ones in flight. A rest written after a finish
+  // would put the session back to running; a set written after a discard would be left in an empty session.
+  const inFlight = useRef(new Set<Promise<unknown>>());
+
+  // Sets ticked on this screen but not yet in a reload: the finish dialog reads them at once, so a workout whose last
+  // set was just ticked is not mistaken for an empty one.
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set());
+  const isDone = (s: GymSet) => s.completed || ticked.has(s.id);
+  const markTicked = (id: string, on: boolean) =>
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   if (vm === null) {
     return (
@@ -76,105 +85,164 @@ export function SessionScreen() {
     );
   }
   if (!vm) {
-    return <DetailShell title={t("session.title")} loading bodySkeleton={<View className="h-40" />} />;
+    return error ? (
+      <DetailShell title={t("session.title")} floatingAction={false} backHref="/gym" primary={<QueryError compact error={error} reload={reload} />} />
+    ) : (
+      <DetailShell title={t("session.title")} loading bodySkeleton={<View className="h-40" />} />
+    );
   }
 
   const { session } = vm;
-  const elapsed = Math.max(0, (session.endTs ?? now) - session.startTs);
+  const lived = session.endTs ? session.endTs - session.startTs : 0;
   const store = actionCtx().store;
   const sessionUrl = `/gym/session/${session.id}`;
-
-  const save = async (set: GymSet, draft: Draft) => {
-    await saveSet(store, { ...set, ...draft });
-    dataChanged();
+  const track = <T,>(job: Promise<T>): Promise<T> => {
+    inFlight.current.add(job);
+    void job.catch(() => {}).finally(() => inFlight.current.delete(job));
+    return job;
   };
-  const tick = async (set: GymSet, draft: Draft) => {
-    const on = !set.completed;
-    if (on && draft.reps <= 0 && !(draft.seconds && draft.seconds > 0) && !(draft.distanceM && draft.distanceM > 0)) {
-      toast.error(t("session.emptySet"));
-      return;
-    }
-    await saveSet(store, { ...set, ...draft, completed: on, ts: on ? now : null });
-    if (on) haptic.tap();
-    // A superset rests only after its other exercise has nothing left to tick.
-    const group = set.supersetId ? vm.blocks.filter((b) => b.sets.some((s) => s.supersetId === set.supersetId)) : [];
-    const waiting = group.some((b) => b.exercise.id !== set.exerciseId && b.sets.some((s) => !s.completed));
-    // A rest after the very last set is a countdown to nothing: only start one when a set is still ahead.
-    const remaining = vm.blocks.some((b) => b.sets.some((s) => s.id !== set.id && !s.completed));
-    if (on && !waiting && remaining) {
-      await startRest(store, session, DEFAULT_REST, now);
-      void scheduleRest(now + DEFAULT_REST, sessionUrl).then((ok) => {
-        if (!ok && !notifyWarned.current) {
-          notifyWarned.current = true;
-          toast.info(t("session.restNotifyOff"));
+  const settle = async () => {
+    while (inFlight.current.size) await Promise.allSettled([...inFlight.current]);
+  };
+
+  const save = (set: GymSet, draft: Draft, completed: boolean) =>
+    track(
+      (async () => {
+        // Keep the row's tick: an edit can land before the reload that puts the tick into the view model.
+        await saveSet(store, { ...set, ...draft, completed });
+        dataChanged("gym");
+      })(),
+    );
+  /** A tick draws at once (the row's own state); this writes it and refreshes the numbers behind it. */
+  const tick = (set: GymSet, draft: Draft, on: boolean): Promise<boolean> =>
+    track(
+      (async (): Promise<boolean> => {
+        if (on && draft.reps <= 0 && !(draft.seconds && draft.seconds > 0) && !(draft.distanceM && draft.distanceM > 0)) {
+          toast.error(t("session.emptySet"));
+          return false;
         }
-      });
-    }
-    dataChanged();
-  };
-  const linkSuperset = async (block: Block, next: Block | null, on: boolean) => {
-    await setSuperset(store, session.id, block.exercise.id, next?.exercise.id ?? null, on ? newId() : null);
-    dataChanged();
-  };
-  const details = async (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) => {
-    await saveSet(store, { ...set, ...patch });
-    dataChanged();
-  };
-  const removeSet = async (set: GymSet) => {
-    await deleteSet(store, set);
-    dataChanged();
-    toast.undo(t("session.setRemoved", { number: set.setNo }), {
-      label: t("session.undo"),
-      onPress: async () => {
-        await restoreSet(store, set);
-        dataChanged();
-        flashRows([set]);
-      },
-    });
-  };
-  const removeExercise = async (block: Block) => {
-    const removed = block.sets;
-    for (const s of removed) await store.deleteGymSet(s.id);
-    dataChanged();
-    toast.undo(t("session.exerciseRemoved", { name: block.exercise.name }), {
-      label: t("session.undo"),
-      onPress: async () => {
-        await restoreSets(store, removed);
-        dataChanged();
-        flashRows(removed);
-      },
-    });
-  };
-  const addOne = async (block: Block) => {
-    await addSet(store, session.id, block.exercise.id);
-    dataChanged();
-  };
-  const move = async (block: Block, delta: -1 | 1) => {
-    await moveExercise(store, session.id, block.exercise.id, delta);
-    dataChanged();
-  };
-  const skipRest = async () => {
-    wasResting.current = false;
-    await stopRest(store, session);
-    void cancelRest();
-    dataChanged();
-  };
-  const adjust = async (delta: number) => {
-    const next = await adjustRest(store, session, delta);
-    dataChanged();
-    if (next.restStartedTs && next.restSec && next.restStartedTs + next.restSec > now) void scheduleRest(next.restStartedTs + next.restSec, sessionUrl);
-    else void cancelRest();
-  };
-  const saveTemplate = async () => {
-    const routine = await saveSessionAsRoutine(store, session, now);
-    if (!routine) return;
-    await updateSession(store, session, { routineId: routine.id });
-    dataChanged();
-    toast.success(t("session.templateSaved", { name: routine.name }));
+        const at = nowS();
+        markTicked(set.id, on);
+        let saved: Awaited<ReturnType<typeof saveSet>>;
+        try {
+          saved = await saveSet(store, { ...set, ...draft, completed: on, ts: on ? at : null });
+        } catch (e) {
+          markTicked(set.id, !on);
+          throw e;
+        }
+        if (!saved.ok) {
+          markTicked(set.id, !on);
+          return false;
+        }
+        dataChanged("gym");
+        return on;
+      })(),
+    );
+  const linkSuperset = (block: Block, next: Block | null, on: boolean) =>
+    track(
+      (async () => {
+        await setSuperset(store, session.id, block.exercise.id, next?.exercise.id ?? null, on ? newId() : null);
+        dataChanged("gym");
+      })(),
+    );
+  const details = (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) =>
+    track(
+      (async () => {
+        await saveSet(store, { ...set, ...patch });
+        dataChanged("gym");
+      })(),
+    );
+  const removeSet = (set: GymSet) =>
+    track(
+      (async () => {
+        await deleteSet(store, set);
+        dataChanged("gym");
+        toast.undo(t("session.setRemoved", { number: set.setNo }), {
+          label: t("session.undo"),
+          onPress: async () => {
+            await restoreSet(store, set);
+            dataChanged("gym");
+            flashRows([set]);
+          },
+        });
+      })(),
+    );
+  const removeExercise = (block: Block) =>
+    track(
+      (async () => {
+        const removed = block.sets;
+        for (const s of removed) await store.deleteGymSet(s.id);
+        dataChanged("gym");
+        toast.undo(t("session.exerciseRemoved", { name: block.exercise.name }), {
+          label: t("session.undo"),
+          onPress: async () => {
+            await restoreSets(store, removed);
+            dataChanged("gym");
+            flashRows(removed);
+          },
+        });
+      })(),
+    );
+  const addOne = (block: Block) =>
+    track(
+      (async () => {
+        await addSet(store, session.id, block.exercise.id);
+        dataChanged("gym");
+      })(),
+    );
+  const move = (block: Block, delta: -1 | 1) =>
+    track(
+      (async () => {
+        await moveExercise(store, session.id, block.exercise.id, delta);
+        dataChanged("gym");
+      })(),
+    );
+  // The rest bar and its writes are this screen's own rows: no reload is needed to show the countdown.
+  const skipRest = () =>
+    track(
+      (async () => {
+        restSeq.current++;
+        setRestOverride(null);
+        void cancelRest();
+        await stopRest(store, session);
+        // The screen keeps the hidden bar, but the cached session must not carry the rest into the next visit.
+        dataChanged("gym");
+      })(),
+    );
+  const adjust = (delta: number) =>
+    track(
+      (async () => {
+        if (!rest) return;
+        const seq = ++restSeq.current;
+        const at = nowS();
+        // Show the new total in the same frame; the write follows.
+        setRestOverride({ startedTs: rest.startedTs, sec: Math.max(5, Math.min(900, rest.sec + delta)) });
+        const next = await adjustRest(store, { ...session, restStartedTs: rest.startedTs, restSec: rest.sec }, delta);
+        setRestOverride(next.restStartedTs && next.restSec ? { startedTs: next.restStartedTs, sec: next.restSec } : null);
+        dataChanged("gym");
+        if (seq !== restSeq.current) return;
+        if (next.restStartedTs && next.restSec && next.restStartedTs + next.restSec > at) void scheduleRest(next.restStartedTs + next.restSec, sessionUrl);
+        else void cancelRest();
+      })(),
+    );
+  const saveTemplate = () =>
+    track(
+      (async () => {
+        const routine = await saveSessionAsRoutine(store, session, nowS());
+        if (!routine) return;
+        await updateSession(store, session, { routineId: routine.id });
+        dataChanged("gym");
+        toast.success(t("session.templateSaved", { name: routine.name }));
+      })(),
+    );
+  // The picker is the heaviest list in the gym: its read starts on the tap, so its rows are there when it lands.
+  const addExercise = () => {
+    void prefetch(getGymPicker, ["gym-picker"]);
+    push(`/gym/exercises?session=${session.id}`);
   };
 
-  const empty = !vm.blocks.some((b) => b.sets.some(isWorkSet));
-  const pending = vm.blocks.reduce((n, b) => n + b.sets.filter((s) => !s.completed).length, 0);
+  const empty = !vm.blocks.some((b) => b.sets.some((s) => isDone(s) && s.type !== "warmup"));
+  const pending = vm.blocks.reduce((n, b) => n + b.sets.filter((s) => !isDone(s)).length, 0);
   const unit = vm.blocks.length && vm.blocks.every((b) => b.exercise.unit === "lb") ? "lb" : "kg";
 
   return (
@@ -182,7 +250,12 @@ export function SessionScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <DetailShell
           title={session.name}
-          subtitle={`${clockText(elapsed)} · ${t("session.setsCount", { count: vm.setCount })}`}
+          subtitle={
+            <>
+              <SessionClock startTs={session.startTs} endTs={session.endTs} />
+              {` · ${t("session.setsCount", { count: vm.setCount })}`}
+            </>
+          }
           floatingAction={false}
           // A workout is opened to be used, not watched slide in: its sets draw in the first frame.
           instant
@@ -190,7 +263,14 @@ export function SessionScreen() {
           action={
             <View className="flex-row items-center gap-1">
               {!session.finished && (
-                <Press accessibilityRole="button" onPress={() => setConfirm("finish")} className="h-9 items-center justify-center rounded-full bg-primary px-3.5">
+                <Press
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setConfirmAt(nowS());
+                    setConfirm("finish");
+                  }}
+                  className="h-9 items-center justify-center rounded-full bg-primary px-3.5"
+                >
                   <Text className="text-[12px] font-bold uppercase tracking-[0.08em] text-primary-foreground">{t("session.finish")}</Text>
                 </Press>
               )}
@@ -203,7 +283,7 @@ export function SessionScreen() {
           }
           footer={
             <View className="gap-3 pb-8">
-              <Button variant="secondary" onPress={() => push(`/gym/exercises?session=${session.id}`)}>
+              <Button variant="secondary" onPress={addExercise}>
                 <View className="flex-row items-center gap-2">
                   <Icon icon={Plus} size={16} tone="foreground" />
                   <Text className="text-[13px] font-bold uppercase tracking-[0.1em]">{t("session.addExercise")}</Text>
@@ -222,7 +302,7 @@ export function SessionScreen() {
                     <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain">{t("session.complete")}</Text>
                   </View>
                   <View className="flex-row gap-2">
-                    <StatTile label={t("session.duration")} value={session.endTs ? lengthText(session.endTs - session.startTs) : lengthText(elapsed)} />
+                    <StatTile label={t("session.duration")} value={lengthText(lived)} />
                     <StatTile label={t("session.sets")} value={String(vm.setCount)} />
                     <StatTile label={t("session.volume")} value={volumeText(vm.volumeKg, unit)} />
                   </View>
@@ -251,14 +331,13 @@ export function SessionScreen() {
                     block={block}
                     next={vm.blocks[index + 1] ?? null}
                     onSuperset={linkSuperset}
-                    session={session}
                     onSave={save}
                     onTick={tick}
                     onDetails={details}
                     onRemoveSet={removeSet}
                     onRemoveExercise={removeExercise}
                     onAddSet={addOne}
-                    onMove={(delta) => void move(block, delta)}
+                    onMove={move}
                     canUp={index > 0}
                     canDown={index < vm.blocks.length - 1}
                     prSetIds={vm.prSetIds}
@@ -270,7 +349,7 @@ export function SessionScreen() {
                   <CardFill />
                   <Icon icon={Dumbbell} size={24} tone="muted-foreground" />
                   <Text className="text-center text-[15px] text-foreground-secondary">{t("session.empty")}</Text>
-                  <Button variant="secondary" onPress={() => push(`/gym/exercises?session=${session.id}`)}>
+                  <Button variant="secondary" onPress={addExercise}>
                     {t("session.addExercise")}
                   </Button>
                 </Card>
@@ -289,32 +368,38 @@ export function SessionScreen() {
         <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
           <MenuItem icon={Dumbbell} label={t("session.rename")} onPress={() => (closeMenu(), setRename(true))} />
           <MenuItem icon={NotebookPen} label={t("session.notes")} onPress={() => (closeMenu(), setNotesOpen(true))} />
-          <MenuItem icon={History} label={t("session.addExercise")} onPress={() => (closeMenu(), push(`/gym/exercises?session=${session.id}`))} />
+          <MenuItem icon={History} label={t("session.addExercise")} onPress={() => (closeMenu(), addExercise())} />
           {!session.finished && <MenuItem icon={Trash2} label={t("session.discard")} danger onPress={() => (closeMenu(), setConfirm("discard"))} />}
           {session.finished && <MenuItem icon={Trash2} label={t("session.delete")} danger onPress={() => (closeMenu(), setConfirm("delete"))} />}
         </MenuPanel>
 
-        {restLeft > 0 && <RestBar left={restLeft} total={session.restSec ?? DEFAULT_REST} onSkip={() => void skipRest()} onAdjust={(d) => void adjust(d)} />}
+        {rest && <RestBar key={rest.startedTs} startedTs={rest.startedTs} sec={rest.sec} onSkip={() => void skipRest()} onAdjust={(d) => void adjust(d)} />}
       </KeyboardAvoidingView>
 
       <ConfirmDialog
         open={confirm === "finish"}
         title={empty ? t("session.emptyFinishTitle") : t("session.finishTitle")}
-        body={empty ? t("session.emptyFinishBody") : `${t("session.finishBody", { sets: vm.setCount, time: clockText(elapsed) })}${pending ? ` ${t("session.finishPending", { count: pending })}` : ""}`}
+        body={empty ? t("session.emptyFinishBody") : `${t("session.finishBody", { sets: vm.setCount, time: clockText(Math.max(0, confirmAt - session.startTs)) })}${pending ? ` ${t("session.finishPending", { count: pending })}` : ""}`}
         confirm={empty ? t("session.discardConfirm") : t("session.finish")}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
           setConfirm(null);
-          wasResting.current = false;
+          // A tick still being written would draw the countdown again on the finished row.
+          await settle();
+          restSeq.current++;
+          setRestOverride(null);
           void cancelRest();
-          if (empty) {
+          // The rows say whether there is work, not the view model a tick behind them: an empty workout is discarded.
+          const latestSets = await store.gymSets([session.id]);
+          if (!latestSets.some(isWorkSet)) {
             await discardSession(store, session.id);
-            dataChanged();
+            dataChanged("gym");
             goBack();
             return;
           }
-          await finishSession(store, session, now);
-          dataChanged();
+          const latest = (await store.gymSessions()).find((s) => s.id === session.id) ?? session;
+          await finishSession(store, latest, nowS());
+          dataChanged("gym");
           toast.success(t("session.saved"));
         }}
       />
@@ -327,10 +412,12 @@ export function SessionScreen() {
         onConfirm={async () => {
           const was = confirm;
           setConfirm(null);
-          wasResting.current = false;
+          await settle();
+          restSeq.current++;
+          setRestOverride(null);
           void cancelRest();
           await discardSession(store, session.id);
-          dataChanged();
+          dataChanged("gym");
           if (was) goBack();
         }}
       />
@@ -338,10 +425,14 @@ export function SessionScreen() {
         <RenameDialog
           initial={session.name}
           onClose={() => setRename(false)}
-          onSave={async (name) => {
+          onSave={(name) => {
             setRename(false);
-            await updateSession(store, session, { name });
-            dataChanged();
+            void track(
+              (async () => {
+                await updateSession(store, session, { name });
+                dataChanged("gym");
+              })(),
+            );
           }}
         />
       )}
@@ -349,10 +440,14 @@ export function SessionScreen() {
         <NotesDialog
           initial={session.notes ?? ""}
           onClose={() => setNotesOpen(false)}
-          onSave={async (notes) => {
+          onSave={(notes) => {
             setNotesOpen(false);
-            await updateSession(store, session, { notes });
-            dataChanged();
+            void track(
+              (async () => {
+                await updateSession(store, session, { notes });
+                dataChanged("gym");
+              })(),
+            );
           }}
         />
       )}
@@ -367,7 +462,6 @@ function BlockCard({
   block,
   next,
   onSuperset,
-  session,
   onSave,
   onTick,
   onDetails,
@@ -383,14 +477,13 @@ function BlockCard({
   block: Block;
   next: Block | null;
   onSuperset: (block: Block, next: Block | null, on: boolean) => void;
-  session: GymSession;
-  onSave: (set: GymSet, d: Draft) => void;
-  onTick: (set: GymSet, d: Draft) => void;
+  onSave: (set: GymSet, d: Draft, completed: boolean) => void;
+  onTick: (set: GymSet, d: Draft, on: boolean) => Promise<boolean>;
   onDetails: (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) => void;
   onRemoveSet: (set: GymSet) => void;
   onRemoveExercise: (block: Block) => void;
   onAddSet: (block: Block) => void;
-  onMove: (delta: -1 | 1) => void;
+  onMove: (block: Block, delta: -1 | 1) => void;
   canUp: boolean;
   canDown: boolean;
   prSetIds: string[];
@@ -457,18 +550,22 @@ function BlockCard({
             hold={hold}
             pr={prSetIds.includes(set.id)}
             flashAt={flash?.ids.includes(set.id) ? flash.at : 0}
-            onSave={(d) => onSave(set, d)}
-            onTick={(d) => onTick(set, d)}
+            onSave={(d, completed) => onSave(set, d, completed)}
+            onTick={(d, on) => onTick(set, d, on)}
             onMenu={() => setNoting(set)}
-            onCopyPrev={() => {
+            onCopyPrev={(completed) => {
               const p = block.prev[i];
               if (!p) return;
-              onSave(set, {
-                weightKg: p.weightKg,
-                reps: p.reps,
-                seconds: p.seconds,
-                distanceM: p.distanceM,
-              });
+              onSave(
+                set,
+                {
+                  weightKg: p.weightKg,
+                  reps: p.reps,
+                  seconds: p.seconds,
+                  distanceM: p.distanceM,
+                },
+                completed,
+              );
             }}
           />
         ))}
@@ -479,8 +576,8 @@ function BlockCard({
       </Press>
 
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
-        {canUp && <MenuItem icon={ArrowUp} label={t("session.moveUp")} onPress={() => (closeMenu(), onMove(-1))} />}
-        {canDown && <MenuItem icon={ArrowDown} label={t("session.moveDown")} onPress={() => (closeMenu(), onMove(1))} />}
+        {canUp && <MenuItem icon={ArrowUp} label={t("session.moveUp")} onPress={() => (closeMenu(), onMove(block, -1))} />}
+        {canDown && <MenuItem icon={ArrowDown} label={t("session.moveDown")} onPress={() => (closeMenu(), onMove(block, 1))} />}
         {supersetId ? (
           <MenuItem icon={Scale} label={t("session.removeSuperset")} onPress={() => (closeMenu(), onSuperset(block, null, false))} />
         ) : next ? (
@@ -537,7 +634,31 @@ function BlockCard({
 }
 
 /** One set: number, last time, weight, reps, tick. */
-function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, onMenu, onCopyPrev }: { set: GymSet; prev: GymSet | null; unit: "kg" | "lb"; cardio: boolean; hold: boolean; pr: boolean; flashAt: number; onSave: (d: Draft) => void; onTick: (d: Draft) => void; onMenu: () => void; onCopyPrev: () => void }) {
+function SetRow({
+  set,
+  prev,
+  unit,
+  cardio,
+  hold,
+  pr,
+  flashAt,
+  onSave,
+  onTick,
+  onMenu,
+  onCopyPrev,
+}: {
+  set: GymSet;
+  prev: GymSet | null;
+  unit: "kg" | "lb";
+  cardio: boolean;
+  hold: boolean;
+  pr: boolean;
+  flashAt: number;
+  onSave: (d: Draft, completed: boolean) => void;
+  onTick: (d: Draft, on: boolean) => Promise<boolean>;
+  onMenu: () => void;
+  onCopyPrev: (completed: boolean) => void;
+}) {
   const { t } = useTranslation("gym");
   const reduce = useReducedMotion();
   const glow = useSharedValue(0);
@@ -553,7 +674,17 @@ function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, on
   const [secs, setSecs] = useState(() => (set.seconds ? String(Math.round(set.seconds)) : ""));
   const [km, setKm] = useState(() => (set.distanceM ? String(Math.round(set.distanceM / 10) / 100) : ""));
   const [mins, setMins] = useState(() => (set.seconds ? String(Math.round((set.seconds / 60) * 10) / 10) : ""));
+  // The tick is drawn here first: the write and the reload land behind it. `busy` turns a second tap while the first
+  // is still being written into an untick; a write the screen refuses (an empty set) flips the row back.
+  const [done, setDone] = useState(set.completed);
+  const busy = useRef(false);
+  useEffect(() => {
+    if (!busy.current) setDone(set.completed);
+  }, [set.completed]);
   const typed = useRef(false);
+  const textKey = (w = weight, r = reps, s = secs, d = km, m = mins) => `${w}|${r}|${s}|${d}|${m}`;
+  // Blur and submit both fire on Android: only a field whose text changed is written, so a row does not reload twice.
+  const lastSaved = useRef(textKey());
 
   // A reload from the store refreshes the fields, but never while one is being typed in.
   useEffect(() => {
@@ -563,6 +694,7 @@ function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, on
     setSecs(set.seconds ? String(Math.round(set.seconds)) : "");
     setKm(set.distanceM ? String(Math.round(set.distanceM / 10) / 100) : "");
     setMins(set.seconds ? String(Math.round((set.seconds / 60) * 10) / 10) : "");
+    lastSaved.current = `${loadText(set.weightKg, unit)}|${set.reps}|${set.seconds ? String(Math.round(set.seconds)) : ""}|${set.distanceM ? String(Math.round(set.distanceM / 10) / 100) : ""}|${set.seconds ? String(Math.round((set.seconds / 60) * 10) / 10) : ""}`;
   }, [set.weightKg, set.reps, set.seconds, set.distanceM, unit]);
 
   const n = (v: string) => {
@@ -577,7 +709,30 @@ function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, on
   });
   const commit = () => {
     typed.current = false;
-    onSave(draft());
+    const key = textKey();
+    if (key === lastSaved.current) return;
+    lastSaved.current = key;
+    onSave(draft(), done);
+  };
+  const toggle = async () => {
+    if (busy.current) return;
+    const on = !done;
+    busy.current = true;
+    setDone(on);
+    if (on) haptic.tap();
+    try {
+      if (await onTick(draft(), on)) {
+        // The write took the typed numbers too: a later blur has nothing left to save.
+        typed.current = false;
+        lastSaved.current = textKey();
+      } else {
+        setDone(!on);
+      }
+    } catch {
+      setDone(!on);
+    } finally {
+      busy.current = false;
+    }
   };
   const prevText = prev
     ? hold
@@ -591,12 +746,12 @@ function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, on
     <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-2 rounded-lg px-1 py-1">
       <Animated.View pointerEvents="none" className="absolute inset-0 rounded-lg bg-strain" style={glowStyle} />
       <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center" accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`}>
-        <Text className={cn("font-numeric text-[13px]", set.completed ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
+        <Text className={cn("font-numeric text-[13px]", done ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
       <Press
         accessibilityRole="button"
         accessibilityLabel={t("session.usePrevious")}
-        onPress={prev ? onCopyPrev : undefined}
+        onPress={prev ? () => onCopyPrev(done) : undefined}
         className="min-w-0 flex-1 flex-row items-center gap-1"
       >
         {pr && <Text className="text-[10px] font-bold uppercase tracking-[0.04em] text-strain">{t("session.record")}</Text>}
@@ -606,20 +761,20 @@ function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, on
         {!!prev && <Icon icon={Copy} size={11} tone="muted-foreground" />}
       </Press>
       {!hold && (
-        <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="w-[62px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
+        <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="w-[62px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
       )}
-      {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="w-[62px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
-      {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
-      {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
-      {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
+      {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="w-[62px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
+      {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
+      {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
+      {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
       <Press
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: set.completed }}
-        onPress={() => onTick(draft())}
+        accessibilityState={{ checked: done }}
+        onPress={() => void toggle()}
         hitSlop={6}
-        className={cn("size-8 items-center justify-center rounded-full", set.completed ? "bg-primary" : "border border-input")}
+        className={cn("size-8 items-center justify-center rounded-full", done ? "bg-primary" : "border border-input")}
       >
-        {set.completed && <Icon icon={Check} size={16} tone="primary-foreground" strokeWidth={2.6} />}
+        {done && <Icon icon={Check} size={16} tone="primary-foreground" strokeWidth={2.6} />}
       </Press>
     </Press>
   );
@@ -648,13 +803,44 @@ function NumCell({ value, onChangeText, onEnd, className, dim, label }: { value:
   );
 }
 
-/** The rest countdown, a bar at the foot of the screen. It reads the session's start instant, so it stays right if the
- *  phone slept through it. */
-function RestBar({ left, total, onSkip, onAdjust }: { left: number; total: number; onSkip: () => void; onAdjust: (delta: number) => void }) {
+/** The workout's clock: it ticks on its own, only while the page is in front, so the sets below it never render for a
+ *  second hand and a picker pushed over the workout does not keep a timer running behind it. */
+function SessionClock({ startTs, endTs }: { startTs: number; endTs: number | null }) {
+  const focused = useIsFocused();
+  const now = useNow(focused && endTs == null);
+  return <>{clockText(Math.max(0, (endTs ?? now) - startTs))}</>;
+}
+
+/**
+ * The rest countdown, a bar at the foot of the screen. It counts on its own (the page below it does not render for a
+ * second hand), reads the stored start instant so a phone that slept comes back to the right number, and ends where it
+ * was set to.
+ */
+function RestBar({ startedTs, sec, onSkip, onAdjust }: { startedTs: number; sec: number; onSkip: () => void; onAdjust: (delta: number) => void }) {
   const { t } = useTranslation("gym");
   const cardStyle = useCardStyle("overlay");
   // The bar's total stays the one it opened with: ±15 turns the clock, it does not rescale the whole bar under the thumb.
-  const [openedWith] = useState(total);
+  const [openedWith] = useState(sec);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  const left = Math.max(0, startedTs + sec - now);
+  const running = left > 0;
+  // A rest that ends while the screen is open gets a haptic; a skip unmounts the bar, so it stays silent.
+  const was = useRef(false);
+  useEffect(() => {
+    if (running) {
+      was.current = true;
+      return;
+    }
+    if (!was.current) return;
+    was.current = false;
+    haptic.success();
+    void cancelRest();
+  }, [running]);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [running]);
   const share = Math.max(0, Math.min(1, left / Math.max(1, openedWith)));
   const reduce = useReducedMotion();
   const scale = useSharedValue(share);
@@ -668,10 +854,11 @@ function RestBar({ left, total, onSkip, onAdjust }: { left: number; total: numbe
       scale.value = share;
       return;
     }
-    const jump = Math.abs(share - scale.value) > 2 / total;
+    const jump = Math.abs(share - scale.value) > 2 / Math.max(1, openedWith);
     scale.value = reduce || jump ? share : withTiming(share, { duration: 1000, easing: Easing.linear });
-  }, [share, total, reduce, scale]);
+  }, [share, openedWith, reduce, scale]);
   const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: scale.value }] }));
+  if (!running) return null;
   return (
     <View className="absolute inset-x-3 bottom-3 overflow-hidden rounded-2xl bg-card px-4 py-3" style={cardStyle}>
       <View className="flex-row items-center gap-3">
@@ -817,5 +1004,5 @@ function NotesDialog({ initial, onClose, onSave }: { initial: string; onClose: (
 
 async function setUnit(exercise: GymExercise, unit: "kg" | "lb") {
   await setExerciseUnit(actionCtx().store, exercise, unit);
-  dataChanged();
+  dataChanged("gym");
 }

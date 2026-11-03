@@ -95,14 +95,34 @@ export const vo2Of = (r: DayRow): { value: number; estimate: boolean } | null =>
       ? { value: r.healthspan.fitnessEstimate.vo2max, estimate: true }
       : null;
 
-/** Every day in [from, to], one Store read per table (in parallel); days without rows come back empty. */
-export async function loadDays(ctx: QueryCtx, from: string, to: string): Promise<Map<string, DayRow>> {
+/**
+ * Every day in [from, to], one Store read per table (in parallel); days without rows come back empty. A screen that asks
+ * for the same range twice in one data version (Home and its dashboard extras, the health hub and its baselines) builds
+ * the rows once: the ctx carries the map for that version.
+ */
+export function loadDays(ctx: QueryCtx, from: string, to: string): Promise<Map<string, DayRow>> {
+  const map = ctx.days;
+  if (!map) return loadDaysUncached(ctx, from, to);
+  const key = `${from}:${to}`;
+  let hit = map.get(key);
+  if (!hit) {
+    hit = loadDaysUncached(ctx, from, to);
+    hit.catch(() => map.delete(key));
+    map.set(key, hit);
+  }
+  return hit;
+}
+
+async function loadDaysUncached(ctx: QueryCtx, from: string, to: string): Promise<Map<string, DayRow>> {
   const { store } = ctx;
+  const fromTs = localMidnight(from, ctx.timeZone);
   const [scoreRows, metricRows, extraRows, logged] = await Promise.all([
     store.scoresIn({ from, to }),
-    metricsWithLoggedBody(store),
+    // The body overlay reads the range's logs, not every log ever written; the same read feeds the water/food totals
+    // below, so the two share one store call.
+    metricsWithLoggedBody(store, fromTs, from, to),
     store.dailyValues({ from, to }),
-    store.loggedEntries(localMidnight(from, ctx.timeZone), Number.MAX_SAFE_INTEGER),
+    store.loggedEntries(fromTs, Number.MAX_SAFE_INTEGER),
   ]);
   const scores = new Map(scoreRows.map((r) => [r.day, r]));
   const metrics = new Map<string, MetricsRow>();

@@ -53,7 +53,8 @@ flowchart LR
 
 [AGENTS.md](AGENTS.md) is the guide for both people and coding agents. The short version:
 
-- **Health Connect only, Android only.** No accounts, no server; the app never writes to Health Connect.
+- **Health Connect only, Android only.** No accounts, no server. The app reads Health Connect and writes only the
+  scale's Weight and Body Fat records, tagged as Pulse; it asks for no other write permissions.
 - **Honest states.** Every nullable metric is `{ value, reason, provisional }` with a reason code. Never show a
   made-up number.
 - **Causality.** A day's scores depend only on that day and earlier days.

@@ -43,7 +43,7 @@ flowchart LR
   G --> HC[(Health Connect)]
   HC -->|read permissions| S[Import on the phone]
   S --> DB[(SQLite: expo-sqlite, async)]
-  DB --> P[Pipeline: stage 1, stage 2, scoring v19]
+  DB --> P[Pipeline: stage 1, stage 2, scoring v30]
   P --> DB
   DB --> Q[View models]
   Q --> UI[Screens: Expo Router, Skia charts]

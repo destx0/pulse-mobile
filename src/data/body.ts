@@ -8,10 +8,11 @@ import { emptyMetrics, type Metrics } from "./types";
 const ALL = Number.MAX_SAFE_INTEGER;
 
 /** `store.allMetrics()` with logged weight, body fat and blood oxygen applied; sorted by day like the store's own list. */
-export async function metricsWithLoggedBody(store: Store): Promise<Metrics[]> {
-  const [metrics, logged] = await Promise.all([store.allMetrics(), store.loggedEntries(0, ALL)]);
+export async function metricsWithLoggedBody(store: Store, fromTs = 0, from?: string, to?: string): Promise<Metrics[]> {
+  const [metrics, logged] = await Promise.all([store.allMetrics(), store.loggedEntries(fromTs, ALL)]);
   const latest = new Map<string, { kg?: { v: number; ts: number }; pct?: { v: number; ts: number }; spo2?: { v: number; ts: number } }>();
   for (const e of logged) {
+    if (from && (e.day < from || (to !== undefined && e.day > to))) continue;
     const data = e.data as { kg?: unknown; pct?: unknown } | null;
     const day = latest.get(e.day) ?? {};
     if (e.type === "weight" && typeof data?.kg === "number" && (!day.kg || e.ts > day.kg.ts)) day.kg = { v: data.kg, ts: e.ts };

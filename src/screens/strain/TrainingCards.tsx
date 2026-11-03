@@ -25,6 +25,7 @@ import { Text } from "@/ui/Text";
 import type { TokenName } from "@/ui/palette";
 import { useTheme } from "@/ui/theme";
 import { useScreen } from "../useScreen";
+import { QueryError } from "@/ui/shells/QueryError";
 
 function P({ children }: { children: ReactNode }) {
   return <Text className="text-[15px] leading-[22px] text-foreground-body">{children}</Text>;
@@ -252,14 +253,14 @@ function StatusBody({ status }: { status: TrainingVM["status"] }) {
 /** Strain's two training cards for day `d`, loaded on their own so the page's query is unchanged. */
 export function TrainingSection({ d, timeZone }: { d: string; timeZone: string }) {
   const { t } = useTranslation("strain");
-  const vm = useScreen((ctx) => getTraining(d, ctx), ["training", d]).data;
+  const { data: vm, error, reload } = useScreen((ctx) => getTraining(d, ctx), ["training", d]);
   return (
     <View className="gap-4">
       <SectionShell variant="card" title={t("training.readiness")} info={trainingReadinessInfo()}>
-        {vm ? <ReadinessBody vm={vm} timeZone={timeZone} /> : cardSkeleton}
+        {vm ? <ReadinessBody vm={vm} timeZone={timeZone} /> : error ? <QueryError compact error={error} reload={reload} /> : cardSkeleton}
       </SectionShell>
       <SectionShell variant="card" title={t("training.status")} info={trainingStatusInfo()}>
-        {vm ? <StatusBody status={vm.status} /> : cardSkeleton}
+        {vm ? <StatusBody status={vm.status} /> : error ? <QueryError compact error={error} reload={reload} /> : cardSkeleton}
       </SectionShell>
     </View>
   );

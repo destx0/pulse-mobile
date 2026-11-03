@@ -95,29 +95,43 @@ create table if not exists gym_measurements (id text primary key, day text not n
 create table if not exists gym_import (id integer primary key check (id = 1), data text not null);
 `;
 
-/** Columns added after a release: each `alter` fails harmlessly on a database that already has it. */
-const MIGRATIONS = [
-  "alter table logged_entries add column source text not null default 'pulse'",
-  "create index if not exists logged_entries_source_day on logged_entries (source, day)",
+/**
+ * Columns added after a release, in order. `pragma user_version` records the ones a database has applied; a column a
+ * database already has (the base SCHEMA carries some of them) is accepted only for SQLite's own duplicate error. Any
+ * other failure stops the open: the app would otherwise run against a missing column and fail later in a random screen.
+ */
+type Migration = { sql: string; table?: string; column?: string };
+const MIGRATIONS: Migration[] = [
+  { sql: "alter table logged_entries add column source text not null default 'pulse'", table: "logged_entries", column: "source" },
+  { sql: "create index if not exists logged_entries_source_day on logged_entries (source, day)" },
   // Auto-detected workouts (stage 1, mobile).
-  "alter table daily_scores add column detected text",
+  { sql: "alter table daily_scores add column detected text", table: "daily_scores", column: "detected" },
   // Waist for the Nes 2011 VO2max estimate (mobile).
-  "alter table profile add column waist_cm real",
+  { sql: "alter table profile add column waist_cm real", table: "profile", column: "waist_cm" },
   // HRV Status and Garmin-style training (Training Effect, Recovery Time, Training Readiness and Status), version 19.
-  "alter table daily_scores add column hrv_status text",
-  "alter table daily_scores add column training text",
+  { sql: "alter table daily_scores add column hrv_status text", table: "daily_scores", column: "hrv_status" },
+  { sql: "alter table daily_scores add column training text", table: "daily_scores", column: "training" },
   // The owner's display name and profile photo path (mobile).
-  "alter table profile add column name text",
-  "alter table profile add column photo text",
+  { sql: "alter table profile add column name text", table: "profile", column: "name" },
+  { sql: "alter table profile add column photo text", table: "profile", column: "photo" },
   // The sleep goal, JSON { hours, method } (Settings › Goals).
-  "alter table profile add column sleep_goal text",
+  { sql: "alter table profile add column sleep_goal text", table: "profile", column: "sleep_goal" },
   // Heart-rate days compacted to one mean per minute (compactHr).
-  "alter table hr_days add column minute integer not null default 0",
+  { sql: "alter table hr_days add column minute integer not null default 0", table: "hr_days", column: "minute" },
   // Units and the clock, JSON { units, hours } (Settings › App).
-  "alter table profile add column display text",
+  { sql: "alter table profile add column display text", table: "profile", column: "display" },
   // Supersets: two exercises of a session sharing an id.
-  "alter table gym_sets add column superset_id text",
+  { sql: "alter table gym_sets add column superset_id text", table: "gym_sets", column: "superset_id" },
 ];
+
+/** The columns the app reads unconditionally; checked after the migrations so a half-applied schema cannot boot. */
+const REQUIRED_COLUMNS: Record<string, string[]> = {
+  logged_entries: ["source"],
+  daily_scores: ["detected", "hrv_status", "training"],
+  profile: ["name", "photo", "sleep_goal", "display"],
+  hr_days: ["minute"],
+  gym_sets: ["superset_id"],
+};
 
 const DAY = 86_400;
 const bucketOf = (ts: number) => Math.floor(ts / DAY);
@@ -550,6 +564,14 @@ class SqliteStore implements Store {
     });
     return days;
   }
+  async needsScoring(today: string, scoringVersion: number) {
+    const [day, stale, dirty] = await Promise.all([
+      this.db.getFirstAsync<{ one: number }>("select 1 as one from daily_scores where day = ? and scoring_version = ? limit 1", [today, scoringVersion]),
+      this.db.getFirstAsync<{ one: number }>("select 1 as one from daily_scores where scoring_version <> ? limit 1", [scoringVersion]),
+      this.db.getFirstAsync<{ one: number }>("select 1 as one from intraday_dirty limit 1"),
+    ]);
+    return !day || !!stale || !!dirty;
+  }
 
   // ── Reads ─────────────────────────────────────────────────────────────────
 
@@ -649,6 +671,18 @@ class SqliteStore implements Store {
       out.push(scoreOf(r));
     }
     return out;
+  }
+  async wornDays(range: DayRange) {
+    // json_extract reads the three fields in SQLite; only the small result crosses to JS, not 12 KB of score JSON a day.
+    const rows = await this.db.getAllAsync<{ day: string; hr_count: number; am: number; pm: number }>(
+      `select day,
+              coalesce(json_extract(strain, '$.hrCount'), 0) as hr_count,
+              coalesce(json_extract(strain, '$.hrMinutesAm'), 0) as am,
+              coalesce(json_extract(strain, '$.hrMinutesPm'), 0) as pm
+         from daily_scores where day >= ? and day <= ? order by day`,
+      [range.from, range.to],
+    );
+    return rows.map((r) => ({ day: r.day, hrCount: r.hr_count, hrMinutesAm: r.am, hrMinutesPm: r.pm }));
   }
   async putScores(row: ScoreRow) {
     await this.tx((db) => db.runAsync(SCORES_SQL, [row.day, row.scoringVersion, row.sessionRhrBpm, ...SCORE_JSON.map((k) => json(row[k]))]));
@@ -1044,23 +1078,93 @@ const TABLES = [
  * background task) then kills every other with "NativeDatabase.prepareAsync has been rejected → NullPointerException",
  * and a reopen just got the same dead connection back from the cache. WAL mode serves several connections; writes stay
  * serialised by the store's queue.
+ *
+ * `openDb` retries "database is locked": the headless background task opens its own store while a sync writes, and
+ * maintenance can hold a VACUUM lock for seconds. Boot is the one place that must wait rather than fail, so the first
+ * busy_timeout is 10 s and five more attempts follow a failed one. An already-open store is reused (see openStore), so
+ * the two runtimes of a cold start do not race each other into a second schema write.
+ *
+ * The mode and auto-vacuum pragmas are read before they are written: `journal_mode = wal` takes an exclusive lock and
+ * does not always wait on busy_timeout, so asking a database that is already WAL to switch could fail at once while the
+ * background task was writing. A WAL database only needs the connection-local pragmas on a later open.
  */
+const LOCK_RETRY_MS = [500, 1500, 3000, 5000, 5000] as const;
+const isLocked = (e: unknown) => /database is locked|database table is locked|SQLITE_BUSY/i.test(e instanceof Error ? e.message : String(e));
+
 async function openDb(name: string): Promise<SQLiteDatabase> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await openDbOnce(name);
+    } catch (e) {
+      if (!isLocked(e) || attempt >= LOCK_RETRY_MS.length) throw e;
+      console.warn(`[db] locked; retrying in ${LOCK_RETRY_MS[attempt]} ms`);
+      await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS[attempt]));
+    }
+  }
+}
+
+const duplicateColumn = (e: unknown) => /duplicate column name|already exists/i.test(e instanceof Error ? e.message : String(e));
+
+/** Applies the migrations a database has not seen, then records the new `user_version`. */
+async function migrate(db: SQLiteDatabase): Promise<void> {
+  const row = await db.getFirstAsync<{ user_version: number }>("pragma user_version");
+  const done = row?.user_version ?? 0;
+  for (let i = done; i < MIGRATIONS.length; i++) {
+    try {
+      await db.execAsync(MIGRATIONS[i].sql);
+    } catch (e) {
+      // Databases from before user_version tracking already have the column; anything else is a real failure.
+      if (!duplicateColumn(e)) throw new Error(`[db] migration ${i + 1} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    await db.execAsync(`pragma user_version = ${i + 1}`);
+  }
+}
+
+/** Fails the open when a column the app reads unconditionally is absent. */
+async function verifySchema(db: SQLiteDatabase): Promise<void> {
+  for (const [table, columns] of Object.entries(REQUIRED_COLUMNS)) {
+    const rows = await db.getAllAsync<{ name: string }>(`pragma table_info(${table})`);
+    const have = new Set(rows.map((r) => r.name));
+    for (const column of columns) if (!have.has(column)) throw new Error(`[db] ${table}.${column} is missing after the migrations`);
+  }
+}
+
+async function openDbOnce(name: string): Promise<SQLiteDatabase> {
   const db = await openDatabaseAsync(name, { useNewConnection: true });
-  // A JS reload mid-write (dev reloads, a crash) can leave the shared native connection inside our transaction.
-  if (db.isInTransactionSync()) await db.execAsync("rollback");
-  // busy_timeout: with a connection per handle, a write that meets another connection's lock waits instead of failing.
-  // auto_vacuum first: it takes effect only before the file is first written (setting WAL writes it), so only on a new
-  // database; an older one switches in reclaimSpace.
-  await db.execAsync("pragma auto_vacuum = incremental");
-  await db.execAsync("pragma journal_mode = wal; pragma synchronous = normal; pragma foreign_keys = on; pragma busy_timeout = 5000;");
-  await db.execAsync(SCHEMA);
-  for (const sql of MIGRATIONS) await db.execAsync(sql).catch(() => {});
-  return db;
+  try {
+    // busy_timeout first: every statement below may meet another connection's writer, and the wait belongs to SQLite,
+    // not to a retry after the fact.
+    await db.execAsync("pragma busy_timeout = 10000");
+    // A JS reload mid-write (dev reloads, a crash) can leave the shared native connection inside our transaction.
+    if (db.isInTransactionSync()) await db.execAsync("rollback");
+    // Read the mode before setting it: on a database already in WAL, `journal_mode = wal` is a needless exclusive lock
+    // that can fail instantly while the background task writes. auto_vacuum takes effect only before the file is first
+    // written (setting WAL writes it), so it is set only on a database that is not in WAL yet.
+    const mode = await db.getFirstAsync<{ journal_mode: string }>("pragma journal_mode");
+    if (mode?.journal_mode?.toLowerCase() !== "wal") {
+      const vacuum = await db.getFirstAsync<{ auto_vacuum: number }>("pragma auto_vacuum");
+      if (vacuum?.auto_vacuum !== INCREMENTAL_VACUUM) await db.execAsync("pragma auto_vacuum = incremental");
+      await db.execAsync("pragma journal_mode = wal");
+    }
+    await db.execAsync("pragma synchronous = normal; pragma foreign_keys = on;");
+    await db.execAsync(SCHEMA);
+    await migrate(db);
+    await verifySchema(db);
+    return db;
+  } catch (e) {
+    await db.closeAsync().catch(() => {});
+    throw e;
+  }
 }
 
 /** The database file. A new name: the drizzle-era `pulse.db` is never read (its rows came from the Google Health API). */
 export const DB_NAME = "pulse-store.db";
+/**
+ * "Explore with sample data" lives in its own database: the demo seed overwrites every health table for 180 days, and
+ * the person's own journal, logs and gym must survive the visit. Switching source opens one or the other
+ * (src/state/app.ts); nothing is copied between them.
+ */
+export const DEMO_DB = "pulse-demo.db";
 const LEGACY_DB = "pulse.db";
 
 /** Deletes the drizzle-era database and its WAL files. Each is gone after the first launch, so later calls do nothing. */
@@ -1068,7 +1172,25 @@ async function deleteLegacyDb(): Promise<void> {
   for (const f of [LEGACY_DB, `${LEGACY_DB}-wal`, `${LEGACY_DB}-shm`]) await deleteDatabaseAsync(f).catch(() => {});
 }
 
-export async function openStore(name = DB_NAME): Promise<Store> {
+const opening = new Map<string, Promise<Store>>();
+
+/**
+ * The store for `name`, opened once per JS runtime. Boot and a background task that fires during boot would otherwise
+ * open two connections and race their schema writes; both get this one. A failed open is not cached, so the error
+ * screen's Try again can make a fresh attempt.
+ */
+export function openStore(name = DB_NAME): Promise<Store> {
+  const already = opening.get(name);
+  if (already) return already;
+  const p = openStoreOnce(name);
+  opening.set(name, p);
+  void p.catch(() => {
+    if (opening.get(name) === p) opening.delete(name);
+  });
+  return p;
+}
+
+async function openStoreOnce(name: string): Promise<Store> {
   if (name === DB_NAME) await deleteLegacyDb();
   return healing(new SqliteStore(await openDb(name)), name);
 }

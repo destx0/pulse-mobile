@@ -64,7 +64,7 @@ export default function LogPage() {
       setError(r.error);
       return;
     }
-    dataChanged();
+    dataChanged("logs");
     if (close) goBack();
     toast.success(t("logForm.saved", { kind: KIND_LABEL[input.kind] }));
   };

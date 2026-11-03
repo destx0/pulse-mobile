@@ -41,6 +41,7 @@ import { TaskPage, TaskSection } from "@/ui/shells/TaskPage";
 import { Text } from "@/ui/Text";
 import { toast } from "@/ui/Toast";
 import { goBack } from "@/ui/navigate";
+import { QueryError } from "@/ui/shells/QueryError";
 
 type Step = "start" | "manual" | "estimating" | "review" | "failed";
 type Problem = EstimateProblem | "no_food";
@@ -188,8 +189,8 @@ export function FoodPage() {
   const { t } = useTranslation("nutrition");
   const { d, edit: editId } = useLocalSearchParams<{ d?: string; edit?: string }>();
   const { custom, ready } = useNutritionTargets();
-  const { data: vm } = useScreen((ctx) => (ready ? getNutrition(ctx, custom).then((v) => ({ v, day: parseDay(d, todayOf(ctx)).d })) : Promise.resolve(null)), ["nutrition", custom, ready, d]);
-  if (!vm) return <TaskPage title={editId ? t("food.titleEdit") : t("food.titleLog")}><View className="h-40" /></TaskPage>;
+  const { data: vm, error, reload } = useScreen((ctx) => (ready ? getNutrition(ctx, custom).then((v) => ({ v, day: parseDay(d, todayOf(ctx)).d })) : Promise.resolve(null)), ["nutrition", custom, ready, d]);
+  if (!vm) return error ? <QueryError error={error} reload={reload} /> : <TaskPage title={editId ? t("food.titleEdit") : t("food.titleLog")}><View className="h-40" /></TaskPage>;
   const edit = editId ? (vm.v.meals.flatMap((g) => g.items).find((f) => f.id === editId && f.source === "pulse") ?? null) : null;
   const at = edit ? wallOf(edit.ts, vm.v.timeZone) : defaultAt({ day: vm.day, today: vm.v.today, timeZone: vm.v.timeZone });
   const meal = edit && edit.meal !== "UNKNOWN" ? edit.meal : mealAt(at.slice(11, 16));
@@ -337,7 +338,7 @@ function Sheet({ edit, at: at0, meal: meal0, timeZone, today }: { edit: FoodItem
       return setError(r.error);
     }
     // Food feeds the nutrition numbers, which the screens add up as they read: they read again, with no sync or scoring run.
-    dataChanged();
+    dataChanged("logs");
     goBack();
     toast.success(message);
   };

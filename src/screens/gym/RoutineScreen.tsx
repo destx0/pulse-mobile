@@ -23,6 +23,7 @@ import { goBack, push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
 import { ConfirmDialog, GymEmpty } from "./parts";
 import { onPickedExercise } from "./pending";
+import { QueryError } from "@/ui/shells/QueryError";
 
 type Item = { exercise: GymExercise; sets: number; reps: number };
 
@@ -30,10 +31,15 @@ export function RoutineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === "new";
   const { t } = useTranslation("gym");
-  const { data } = useScreen((ctx) => getGymRoutine(ctx, id), ["gym-routine", id]);
+  const { data, error, reload } = useScreen((ctx) => getGymRoutine(ctx, id), ["gym-routine", id]);
   if (!isNew && data === null)
     return <DetailShell title={t("routine.edit")} floatingAction={false} backHref="/gym" primary={<GymEmpty icon={Dumbbell} title={t("routine.notFound")} body={t("routine.notFoundBody")} />} />;
-  if (!isNew && !data) return <DetailShell title={t("routine.edit")} loading backHref="/gym" bodySkeleton={<View className="h-40" />} />;
+  if (!isNew && !data)
+    return error ? (
+      <DetailShell title={t("routine.edit")} floatingAction={false} backHref="/gym" primary={<QueryError compact error={error} reload={reload} />} />
+    ) : (
+      <DetailShell title={t("routine.edit")} loading backHref="/gym" bodySkeleton={<View className="h-40" />} />
+    );
   return <Editor key={isNew ? "new" : id} id={id} isNew={isNew} initial={data ?? null} />;
 }
 
@@ -87,7 +93,7 @@ function Editor({ id, isNew, initial }: { id: string; isNew: boolean; initial: R
     const routine = await persist();
     if (!routine) return;
     setStartSig(sig);
-    dataChanged();
+    dataChanged("gym");
     goBack();
   };
 
@@ -104,7 +110,7 @@ function Editor({ id, isNew, initial }: { id: string; isNew: boolean; initial: R
     }
     const res = await startSession(c, { routineId: routine.id });
     if (!res.ok) return;
-    dataChanged();
+    dataChanged("gym");
     push(`/gym/session/${res.data.session.id}`);
   };
 
@@ -221,7 +227,7 @@ function Editor({ id, isNew, initial }: { id: string; isNew: boolean; initial: R
         onConfirm={async () => {
           setConfirm(false);
           await deleteRoutine(actionCtx().store, id);
-          dataChanged();
+          dataChanged("gym");
           goBack();
         }}
       />

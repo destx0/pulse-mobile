@@ -23,6 +23,7 @@ import { toast } from "@/ui/Toast";
 import { useScreen } from "../useScreen";
 import { BehaviorPicker, saveSelection, shownOf } from "./BehaviorPicker";
 import { DURATION } from "@/ui/motion";
+import { QueryError } from "@/ui/shells/QueryError";
 
 function Behaviours({ vm }: { vm: BehavioursVM }) {
   const { t } = useTranslation("more");
@@ -69,7 +70,7 @@ function Behaviours({ vm }: { vm: BehavioursVM }) {
     if (!r.ok) return invalid(r.error === i18n.t("errors:journal.tagExists", { tag: tagKey(name) }) ? t("behaviours.exists") : r.error === i18n.t("errors:journal.tooManyBehaviours", { count: MAX_TAGS }) ? t("behaviours.limit") : t("behaviours.addFailed"));
     setAddError(null);
     setLabel("");
-    dataChanged();
+    dataChanged("journal");
     toast.success(t("behaviours.added", { name }));
   };
 
@@ -177,6 +178,6 @@ function BehavioursLoading() {
 
 /** Behaviours `/more/behaviours` (U21): manage the journal check-in list. */
 export function BehavioursScreen() {
-  const { data } = useScreen(getBehaviours, ["behaviours"]);
-  return data ? <Behaviours vm={data} /> : <BehavioursLoading />;
+  const { data, error, reload } = useScreen(getBehaviours, ["behaviours"]);
+  return data ? <Behaviours vm={data} /> : error ? <QueryError error={error} reload={reload} /> : <BehavioursLoading />;
 }

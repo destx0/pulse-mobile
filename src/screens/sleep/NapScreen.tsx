@@ -15,14 +15,15 @@ import { EmptyState } from "@/ui/shells/EmptyState";
 import { SectionShell } from "@/ui/shells/SectionShell";
 import { useScreen } from "../useScreen";
 import { NAP_BODY_SKELETON, NapSkeleton } from "./NapSkeleton";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function NapScreen({ id }: { id: string }) {
   const { t } = useTranslation("sleep");
   const { t: coachT } = useTranslation("coach");
   const setup = useCoachSetup();
   const coach = coachReady(setup);
-  const { data } = useScreen(async (ctx) => ({ vm: await getNap(id, ctx), today: todayOf(ctx), timeZone: ctx.timeZone }), ["nap", id]);
-  if (!data) return <NapSkeleton />;
+  const { data, error, reload } = useScreen(async (ctx) => ({ vm: await getNap(id, ctx), today: todayOf(ctx), timeZone: ctx.timeZone }), ["nap", id]);
+  if (!data) return error ? <QueryError error={error} reload={reload} /> : <NapSkeleton />;
   const { vm, today, timeZone } = data;
   // The web calls notFound(): its default page says this.
   if (!vm) return <DetailShell title={t("nap.title")} align="start" primary={<EmptyState body={t("nap.notFound")} />} />;

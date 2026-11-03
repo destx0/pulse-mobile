@@ -14,7 +14,9 @@ import { Press } from "../Press";
 
 export type DetailHeaderProps = {
   title: string;
-  subtitle?: string;
+  /** A line under the title. A live value (a workout's clock) can be a component of its own, so the page below it does
+   *  not render when only the subtitle changes. */
+  subtitle?: ReactNode;
   info?: InfoContent;
   /** Where Back goes when there is nothing to go back to (a deep link); also the target when the screen is nested. */
   backHref?: string;
@@ -50,7 +52,7 @@ export function DetailHeaderRow({ title, subtitle, info, backHref, dateTitle, di
 
   if (align === "start")
     return (
-      <View className={cn("min-h-11 flex-row items-start gap-2 px-2", subtitle && "pb-1", className)}>
+      <View className={cn("min-h-11 flex-row items-start gap-2 px-2", !!subtitle && "pb-1", className)}>
         <View className="h-11 justify-center">{back}</View>
         {!!titleIcon && <View className="h-11 justify-center"><View className="size-7 items-center justify-center">{titleIcon}</View></View>}
         <View className="min-w-0 flex-1 pt-3">

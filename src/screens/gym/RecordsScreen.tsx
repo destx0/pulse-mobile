@@ -13,10 +13,11 @@ import { DetailShell } from "@/ui/shells/DetailShell";
 import { DAY, formatDay } from "@/lib/format";
 import { push } from "@/ui/navigate";
 import { GymEmpty } from "./parts";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function RecordsScreen() {
   const { t } = useTranslation("gym");
-  const { data } = useScreen(getGymRecords, ["gym-records"]);
+  const { data, error, reload } = useScreen(getGymRecords, ["gym-records"]);
 
   return (
     <DetailShell
@@ -26,7 +27,7 @@ export function RecordsScreen() {
       loading={!data}
       bodySkeleton={<View className="h-40" />}
       primary={
-        !data ? null : data.rows.length ? (
+        !data ? (error ? <QueryError compact error={error} reload={reload} /> : null) : data.rows.length ? (
           <Card className="px-3 py-1">
             <CardFill />
             {data.rows.map((row, i) => {

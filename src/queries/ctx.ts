@@ -13,4 +13,9 @@ export type QueryCtx = {
   /** Unix seconds. */
   now: number;
   sync: SyncState;
+  /**
+   * loadDays results for this data version, keyed by range. A screen with two queries over the same days builds the
+   * rows once; the score JSON itself is cached per day in src/data/memo.ts.
+   */
+  days?: Map<string, Promise<Map<string, import("./common").DayRow>>>;
 };

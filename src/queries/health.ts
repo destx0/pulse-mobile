@@ -57,12 +57,14 @@ import { metricsWithLoggedBody } from "@/data/body";
 /** Health hub `/health`: today's values (spec §7.6). */
 export async function getHealthHub(ctx: QueryCtx): Promise<HealthHubVM> {
   const today = todayOf(ctx);
-  const rows = await loadDays(ctx, addDays(today, -35), today);
+  const [rows, last] = await Promise.all([loadDays(ctx, addDays(today, -35), today), lastStored(ctx, today)]);
   const row = rows.get(today);
+  // The hub's Pulse Age and Fitness read the same six-month baseline: one readDay pass, shared.
+  const baseline = await loadDays(ctx, addDays(last, -181), last);
   const [hsVm, monitor, fit, stressSeries, heartRate] = await Promise.all([
-    getHealthspan(today, ctx),
+    getHealthspan(today, ctx, baseline, last),
     getMonitor(today, ctx, rows),
-    getFitness(ctx),
+    getFitness(ctx, baseline, last),
     loadSeries(ctx, today, "stress"),
     latestHr(ctx),
   ]);
@@ -255,10 +257,11 @@ const HS_ORDER = ["sleepHours", "sri", "zone13", "zone45", "strength", "steps", 
 const VO2_CAPTION = { run: "vo2Run", daily: "vo2Daily", estimate: "vo2Estimate" } as const;
 
 /** Healthspan `/health/healthspan` for the ISO week containing `day` (spec §7.7). Updated weekly. */
-export async function getHealthspan(day: string, ctx: QueryCtx): Promise<HealthspanVM> {
+export async function getHealthspan(day: string, ctx: QueryCtx, preloaded?: Map<string, DayRow>, preloadedLast?: string): Promise<HealthspanVM> {
   const today = todayOf(ctx);
   const [weekStart, weekEnd] = weekOf(day);
-  const [last, rows] = await Promise.all([lastStored(ctx, today), loadDays(ctx, addDays(weekEnd, -182), weekEnd)]);
+  const last = preloadedLast ?? (await lastStored(ctx, today));
+  const rows = preloaded ?? (await loadDays(ctx, addDays(weekEnd, -182), weekEnd));
   // A finished week shows its Sunday; the current week shows last Sunday until this one ends.
   const lastSunday = addDays(weekStart, -1);
   const shown = weekEnd <= last ? weekEnd : rows.get(lastSunday)?.healthspan ? lastSunday : last;
@@ -541,10 +544,11 @@ async function measurements(ctx: QueryCtx, day: string, today: string): Promise<
 // ── Stress Monitor ──────────────────────────────────────────────────────────
 
 /** Stress Monitor `/health/stress` for `day` (spec §7.9). */
-export async function getStress(day: string, ctx: QueryCtx): Promise<StressVM> {
+export async function getStress(day: string, ctx: QueryCtx, preloaded?: Map<string, DayRow>): Promise<StressVM> {
   const today = todayOf(ctx);
   const isToday = day === today;
-  const [rows, series, exs] = await Promise.all([loadDays(ctx, addDays(day, -29), day), loadSeries(ctx, day, "stress"), exercisesBetween(ctx, day, day)]);
+  const rows = preloaded?.has(addDays(day, -29)) ? preloaded : await loadDays(ctx, addDays(day, -29), day);
+  const [series, exs] = await Promise.all([loadSeries(ctx, day, "stress"), exercisesBetween(ctx, day, day)]);
   const row = rows.get(day);
   const st = row?.stress;
   const gauge = stressNow(row, isToday);
@@ -614,10 +618,10 @@ export const acwrStatus = (acwr: number) => {
 };
 
 /** Fitness `/health/fitness`: latest values (spec §7.10). */
-export async function getFitness(ctx: QueryCtx): Promise<FitnessVM> {
+export async function getFitness(ctx: QueryCtx, preloaded?: Map<string, DayRow>, preloadedLast?: string): Promise<FitnessVM> {
   const today = todayOf(ctx);
-  const last = await lastStored(ctx, today);
-  const rows = await loadDays(ctx, addDays(last, -181), last);
+  const last = preloadedLast ?? (await lastStored(ctx, today));
+  const rows = preloaded ?? (await loadDays(ctx, addDays(last, -181), last));
   const row = rows.get(last);
   const f = row?.fitness;
   const decade = (age: number) => {

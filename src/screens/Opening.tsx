@@ -6,8 +6,9 @@
 // the whole window, the mark filling the box's height (assets/brand/splash-icon.svg, viewBox 4.5 4.5 15 15), on the
 // scheme's splash colour. This overlay draws the same box at the window's centre, so the native splash hides with no
 // fade over an identical picture. With reduce motion the overlay never shows: the native splash hands straight over.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, useColorScheme, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SplashScreen from "expo-splash-screen";
 import Animated, { Easing, runOnJS, useAnimatedProps, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSequence, withTiming } from "react-native-reanimated";
 import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from "react-native-svg";
@@ -33,6 +34,9 @@ const GLOW_PEAK = 0.55;
 /** The overlay fades as the dub settles: 520 ms in, 300 ms long, so the whole opening is 820 ms. */
 const FADE_AT_MS = 520;
 const FADE_MS = 300;
+/** After the first hand-over the mark only has to cover the splash: a short fade, no beat. */
+const SEEN_KEY = "pulse.opening.seen";
+const SHORT_MS = 180;
 
 /** Room around the mark for the move: Android clips an SVG at its bounds. */
 const PAD = 1.5;
@@ -46,6 +50,14 @@ export function Opening({ ready }: { ready: boolean }) {
   const reduce = useReducedMotion();
   const [laidOut, setLaidOut] = useState(false);
   const [done, setDone] = useState(false);
+  const seen = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem(SEEN_KEY)
+      .then((v) => {
+        seen.current = !!v;
+      })
+      .catch(() => {});
+  }, []);
   const up = useSharedValue(0);
   const down = useSharedValue(0);
   const glow = useSharedValue(0);
@@ -56,7 +68,14 @@ export function Opening({ ready }: { ready: boolean }) {
     // The overlay is on screen under the native splash: the splash goes at once (no fade, app/_layout.tsx), the picture
     // does not change.
     SplashScreen.hide();
+    void AsyncStorage.setItem(SEEN_KEY, "1").catch(() => {});
     if (reduce) return;
+    if (seen.current) {
+      shown.value = withTiming(0, { duration: SHORT_MS, easing: Easing.bezier(0.2, 0, 0, 1) }, (finished) => {
+        if (finished) runOnJS(setDone)(true);
+      });
+      return;
+    }
     const beat = (to: number) => withSequence(withTiming(to, { duration: OUT_MS, easing: EASE }), withTiming(0, { duration: BACK_MS, easing: EASE }));
     up.value = beat(-MOVE);
     down.value = withDelay(DUB_DELAY_MS, beat(MOVE));

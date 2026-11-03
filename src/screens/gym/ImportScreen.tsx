@@ -62,7 +62,7 @@ export function ImportScreen() {
       }
       setDone(res.data);
       setPreview(null);
-      dataChanged();
+      dataChanged("gym");
       toast.success(t("import.done", { count: res.data.sessions }));
     } finally {
       setBusy(false);
@@ -79,7 +79,7 @@ export function ImportScreen() {
     setUndoing(true);
     try {
       await undoStrongImport(actionCtx().store, confirmUndo);
-      dataChanged();
+      dataChanged("gym");
       setDone(null);
       setPreview(null);
       setText(null);

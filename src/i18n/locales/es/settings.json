@@ -159,7 +159,7 @@
     "reimportTitle": "¿Reimportar tu historial?",
     "reimportBody": "Pulse vuelve a leer los últimos 180 días de Health Connect y los puntúa de nuevo, por si una app compartió datos tarde. Tu diario y tu perfil se conservan.",
     "sampleTitle": "¿Usar datos de ejemplo?",
-    "sampleConfirmBody": "Pulse elimina lo que importó de Health Connect y llena cada pantalla con 180 días de datos generados. Tu perfil se conserva para cuando vuelvas.",
+    "sampleConfirmBody": "Pulse pasa a 180 días de datos de ejemplo generados en un espacio aparte. Tus puntuaciones, diario, registros, gimnasio y perfil siguen como están; al volver, los recuperas.",
     "sampleFailed": "No se pudieron crear los datos de ejemplo. Inténtalo de nuevo."
   },
   "bg": {

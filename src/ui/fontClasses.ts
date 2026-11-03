@@ -35,6 +35,20 @@ export function readFont(className: string | undefined, inherited: Face): { face
   return { face: { family, weight }, rest: rest.join(" "), lines, shrink: shrinkOf(rest, nowrap) };
 }
 
+/** `readFont` results by class string and inherited face: the same literal classes on every render hit this map. */
+const fontCache = new Map<string, ReturnType<typeof readFont>>();
+export function readFontCached(className: string | undefined, inherited: Face) {
+  const key = `${inherited.family}|${inherited.weight}|${className ?? ""}`;
+  let hit = fontCache.get(key);
+  if (!hit) {
+    hit = readFont(className, inherited);
+    // A page has a few dozen distinct class strings; a long-lived app could accumulate more (translations, dev screens).
+    if (fontCache.size > 1000) fontCache.clear();
+    fontCache.set(key, hit);
+  }
+  return hit;
+}
+
 /**
  * CSS flex items shrink by default (flex-shrink: 1) and their text wraps to fit; Yoga's do not (flexShrink 0), so a row
  * of bare text runs off its card on a narrow phone. Text therefore shrinks as on the web, unless its own classes set
@@ -52,6 +66,16 @@ const COLOR_CLASS = new RegExp(
 
 /**
  * The web sets `text-foreground` on <body> and every element inherits it. React Native text inherits only from a parent
- * <Text>, so a top-level <Text> without a colour class of its own gets the foreground.
+ * <Text>, so a top-level <Text> without a colour class of its own gets the foreground. Cached by class string, like
+ * readFont: the regex ran on every text node on every render.
  */
-export const hasColorClass = (className: string) => className.split(/\s+/).some((t) => COLOR_CLASS.test(t));
+const colorCache = new Map<string, boolean>();
+export function hasColorClass(className: string) {
+  let hit = colorCache.get(className);
+  if (hit === undefined) {
+    hit = className.split(/\s+/).some((t) => COLOR_CLASS.test(t));
+    if (colorCache.size > 1000) colorCache.clear();
+    colorCache.set(className, hit);
+  }
+  return hit;
+}

@@ -126,7 +126,8 @@ export async function startSession(c: ActionCtx, input: StartInput = {}): Promis
       });
     }
   });
-  for (const s of sets) await c.store.putGymSet(s);
+  // One transaction for the whole first set list: fifteen separate writes is a visible wait before the page opens.
+  await c.store.putGymSets(sets);
   return { ok: true, data: { session, sets } };
 }
 
@@ -160,7 +161,7 @@ export async function addExerciseToSession(store: Store, session: GymSession, ex
       note: null,
     });
   }
-  for (const s of sets) await store.putGymSet(s);
+  await store.putGymSets(sets);
   return sets;
 }
 

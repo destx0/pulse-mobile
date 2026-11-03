@@ -29,6 +29,7 @@ import { useTheme } from "@/ui/theme";
 import { GOALS_SETTINGS } from "./Goals";
 import { ASIDE, BarLine, GoalRowShell, planColor } from "./parts";
 import { PLAN_STATUS, planCaption, planTargetText, planValueText } from "./weeklyPlanView";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export const PLAN_ICON: Record<PlanKey, LucideIcon> = { zone13: HeartPulse, zone45: Flame, strength: Dumbbell, steps: Footprints, consistency: CalendarCheck, sleepNeed: Moon };
 
@@ -41,8 +42,8 @@ const paceOf = (it: PlanRow) => (it.expected !== null && it.status !== "done" &&
 /** The week holding `day`, once the phone's plan is read (the defaults would show the wrong targets until then). */
 function usePlanWeek(day: string) {
   const { plan, ready } = useWeeklyPlan();
-  const { data } = useScreen((ctx) => (ready ? getWeeklyPlan(day, ctx, plan) : Promise.resolve(null)), ["weeklyPlan", day, plan, ready]);
-  return { keys: PLAN_KEYS.filter((k) => plan.enabled[k]), ready, data: data && data.day === day ? data : undefined };
+  const { data, error, reload } = useScreen((ctx) => (ready ? getWeeklyPlan(day, ctx, plan) : Promise.resolve(null)), ["weeklyPlan", day, plan, ready]);
+  return { keys: PLAN_KEYS.filter((k) => plan.enabled[k]), ready, data: data && data.day === day ? data : undefined, error, reload };
 }
 
 /** Strain's Weekly plan card. */
@@ -130,7 +131,7 @@ function PlanLine({ it, onOpen }: { it: PlanRow; onOpen: () => void }) {
 export function WeeklyPlanPageBody() {
   const { t } = useTranslation("goals");
   const [day] = useSelectedDay();
-  const { keys, data } = usePlanWeek(day);
+  const { keys, data, error, reload } = usePlanWeek(day);
   const go = (href: string) => {
     goBack();
     push(href);
@@ -148,7 +149,7 @@ export function WeeklyPlanPageBody() {
       }
     >
       <Card className="gap-0 px-4 py-1">
-        {data ? <PlanList data={data} go={go} /> : <View className="gap-4 py-3">{keys.map((k) => <SkeletonText key={k} lh={26} fs={22} className="w-40" />)}</View>}
+        {data ? <PlanList data={data} go={go} /> : error ? <QueryError compact error={error} reload={reload} /> : <View className="gap-4 py-3">{keys.map((k) => <SkeletonText key={k} lh={26} fs={22} className="w-40" />)}</View>}
       </Card>
     </TaskPage>
   );

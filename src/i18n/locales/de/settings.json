@@ -158,7 +158,7 @@
     "reimportTitle": "Verlauf neu importieren?",
     "reimportBody": "Pulse liest die letzten 180 Tage erneut aus Health Connect und bewertet sie neu, für Daten, die eine App verspätet geteilt hat. Dein Journal und dein Profil bleiben.",
     "sampleTitle": "Beispieldaten verwenden?",
-    "sampleConfirmBody": "Pulse entfernt, was es aus Health Connect importiert hat, und füllt jeden Bildschirm mit 180 Tagen generierter Daten. Dein Profil bleibt erhalten, falls du zurückwechselst.",
+    "sampleConfirmBody": "Pulse wechselt zu 180 Tagen generierter Beispieldaten in einem eigenen Bereich. Deine eigenen Scores, dein Journal, deine Logs, dein Gym und dein Profil bleiben, wie sie sind; beim Zurückwechseln sind sie wieder da.",
     "sampleFailed": "Die Beispieldaten konnten nicht erstellt werden. Versuch es noch einmal."
   },
   "bg": {

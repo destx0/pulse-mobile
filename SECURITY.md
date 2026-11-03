@@ -25,7 +25,8 @@ In scope, for example:
 - Anything that lets another app, or anyone without the unlocked phone, read Pulse's data.
 - Health data or secrets (such as the coach key, kept in `expo-secure-store`) leaking through logs, errors,
   exports, backups or the network.
-- Pulse writing to Health Connect, or reading more than the permissions it asked for.
+- Pulse writing health data other than the Weight and Body Fat records the person saves from the scale, or reading
+  more than the permissions it asked for.
 
 Out of scope:
 

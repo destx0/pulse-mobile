@@ -21,11 +21,12 @@ import { DetailShell } from "@/ui/shells/DetailShell";
 import { Input } from "@/screens/log/fields";
 import { goBack, replace } from "@/ui/navigate";
 import { hasPickerListener, pickedExercise } from "./pending";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function PickerScreen() {
   const { session: sessionId } = useLocalSearchParams<{ session?: string }>();
   const { t } = useTranslation("gym");
-  const { data } = useScreen(getGymPicker, ["gym-picker"]);
+  const { data, error, reload } = useScreen(getGymPicker, ["gym-picker"]);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -39,7 +40,7 @@ export function PickerScreen() {
       const session = sessions.find((s) => s.id === sessionId);
       if (!session) return goBack();
       await addExerciseToSession(c.store, session, exercise, { count: 3, reps: exercise.hold ? 0 : 10 });
-      dataChanged();
+      dataChanged("gym");
       goBack();
       return;
     }
@@ -57,7 +58,7 @@ export function PickerScreen() {
       session = started.data.session;
     }
     await addExerciseToSession(c.store, session, exercise, { count: 3, reps: exercise.hold ? 0 : 10 });
-    dataChanged();
+    dataChanged("gym");
     replace(`/gym/session/${session.id}`);
   };
 
@@ -76,7 +77,7 @@ export function PickerScreen() {
         </Press>
       }
       primary={
-        !data ? null : (
+        !data ? (error ? <QueryError compact error={error} reload={reload} /> : null) : (
           <View className="gap-6">
             <View className="flex-row items-center gap-2 rounded-xl bg-secondary px-3">
               <Icon icon={Search} size={18} tone="muted-foreground" />
@@ -173,7 +174,7 @@ function NewExerciseDialog({ onDone, onCancel }: { onDone: (e: GymExercise | nul
               disabled={!name.trim()}
               onPress={async () => {
                 const ex = await createExercise(actionCtx().store, { name, bodyPart: part });
-                dataChanged();
+                dataChanged("gym");
                 onDone(ex);
               }}
             >

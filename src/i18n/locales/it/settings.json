@@ -159,7 +159,7 @@
     "reimportTitle": "Reimportare la cronologia?",
     "reimportBody": "Pulse rilegge da Health Connect gli ultimi 180 giorni e ne ricalcola i punteggi, per i dati condivisi in ritardo da un’app. Diario e profilo restano.",
     "sampleTitle": "Usare i dati di esempio?",
-    "sampleConfirmBody": "Pulse rimuove ciò che ha importato da Health Connect e riempie ogni schermata con 180 giorni di dati generati. Il tuo profilo viene conservato per quando tornerai indietro.",
+    "sampleConfirmBody": "Pulse passa a 180 giorni di dati di esempio generati, in uno spazio separato. I tuoi punteggi, diario, registri, palestra e profilo restano come sono; tornando indietro li ritrovi.",
     "sampleFailed": "Impossibile creare i dati di esempio. Riprova."
   },
   "bg": {

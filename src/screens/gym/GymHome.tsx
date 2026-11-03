@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
+import { useIsFocused } from "expo-router";
 import { ChevronRight, Dumbbell, Play, Plus, Search, Trophy } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { deleteRoutine as removeRoutine, startSession } from "@/actions/gym";
 import { loadText, toUnit, trimLoad } from "@/core/gym/load";
-import { getGymHome } from "@/queries/gym";
-import { useScreen } from "@/screens/useScreen";
+import type { GymHomeVM } from "@/queries/gym";
+import { getGymHome, getGymSession } from "@/queries/gym";
+import { prefetch, useScreen } from "@/screens/useScreen";
 import { Button } from "@/ui/Button";
 import { CARD_CLASS, Card, CardFill, useCardStyle } from "@/ui/Card";
 import { cn } from "@/ui/cn";
@@ -20,37 +22,42 @@ import { push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
 import { Block, ConfirmDialog, GymEmpty, SessionRow, StatTile, TemplateCard, clockText, lengthText, useNow, volumeText } from "./parts";
 import { GymSkeleton } from "./GymSkeleton";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function GymHome() {
   const { t } = useTranslation("gym");
-  const { data } = useScreen(getGymHome, ["gym-home"]);
+  const { data, error, reload } = useScreen(getGymHome, ["gym-home"]);
   const [pending, setPending] = useState(false);
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
-  // The clock only matters while a workout runs: a tab left mounted behind More must not tick every second.
   const active = data?.active;
-  const now = useNow(!!active);
-  const cardStyle = useCardStyle();
+
+  // The workout page starts its read on the tap, in parallel with the slide, so its sets are there when it lands.
+  const sessionKey = (id: string) => ["gym-session", id] as const;
+  const preloadSession = (id: string) => prefetch((ctx) => getGymSession(ctx, id), sessionKey(id));
+  const openSession = (id: string) => {
+    void preloadSession(id);
+    push(`/gym/session/${id}`);
+  };
 
   const start = async (routineId?: string) => {
     if (pending) return;
     if (data?.active) {
       // One workout at a time: a tap on a template while one runs says so and opens the one already going.
       toast.info(t("home.alreadyActive"));
-      push(`/gym/session/${data.active.session.id}`);
+      openSession(data.active.session.id);
       return;
     }
     setPending(true);
     try {
       const res = await startSession(actionCtx(), routineId ? { routineId } : {});
       if (!res.ok) return;
-      dataChanged();
+      dataChanged("gym");
+      void preloadSession(res.data.session.id);
       push(`/gym/session/${res.data.session.id}`);
     } finally {
       setPending(false);
     }
   };
-
-  const elapsed = active ? now - active.session.startTs : 0;
 
   return (
     <PageShell
@@ -64,29 +71,10 @@ export function GymHome() {
       }
     >
       {!data ? (
-        <GymSkeleton />
+        error ? <QueryError compact error={error} reload={reload} /> : <GymSkeleton />
       ) : (
         <>
-          {active && (
-            <Press activeScale={0.98} accessibilityRole="button" onPress={() => push(`/gym/session/${active.session.id}`)} className={cn(CARD_CLASS, "px-4 py-4")} style={cardStyle}>
-              <CardFill />
-              <View className="flex-row items-center gap-3">
-                <View className="size-10 items-center justify-center rounded-full bg-secondary">
-                  <Icon icon={Play} size={18} tone="strain" />
-                </View>
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-strain">{t("home.inProgress")}</Text>
-                  <Text className="text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
-                    {active.session.name}
-                  </Text>
-                  <Text className="text-[12px] leading-4 tabular-nums text-muted-foreground">
-                    {t("home.resumeSub", { done: active.done, total: active.setCount })} · {clockText(elapsed)}
-                  </Text>
-                </View>
-                <Icon icon={ChevronRight} size={18} tone="muted-foreground" />
-              </View>
-            </Press>
-          )}
+          {active && <ResumeCard active={active} onPress={() => openSession(active.session.id)} />}
 
           {!active && (
             <Button onPress={() => void start()} disabled={pending}>
@@ -140,7 +128,7 @@ export function GymHome() {
                 <CardFill />
                 {data.recent.map((card, i) => (
                   <View key={card.id} className={i > 0 ? "border-t border-border/60" : undefined}>
-                    <SessionRow card={card} onPress={() => push(`/gym/session/${card.id}`)} />
+                    <SessionRow card={card} onPress={() => openSession(card.id)} />
                   </View>
                 ))}
               </Card>
@@ -212,9 +200,41 @@ export function GymHome() {
           if (!removing) return;
           await removeRoutine(actionCtx().store, removing.id);
           setRemoving(null);
-          dataChanged();
+          dataChanged("gym");
         }}
       />
     </PageShell>
+  );
+}
+
+/**
+ * The workout in progress. Its clock is its own leaf, and it ticks only while the tab is in front: the tab stays
+ * mounted under a pushed workout page, and a timer there must not re-render this page once a second behind it.
+ */
+function ResumeCard({ active, onPress }: { active: NonNullable<GymHomeVM["active"]>; onPress: () => void }) {
+  const { t } = useTranslation("gym");
+  const focused = useIsFocused();
+  const now = useNow(focused);
+  const cardStyle = useCardStyle();
+  const elapsed = now - active.session.startTs;
+  return (
+    <Press activeScale={0.98} accessibilityRole="button" onPress={onPress} className={cn(CARD_CLASS, "px-4 py-4")} style={cardStyle}>
+      <CardFill />
+      <View className="flex-row items-center gap-3">
+        <View className="size-10 items-center justify-center rounded-full bg-secondary">
+          <Icon icon={Play} size={18} tone="strain" />
+        </View>
+        <View className="min-w-0 flex-1">
+          <Text className="text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-strain">{t("home.inProgress")}</Text>
+          <Text className="text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
+            {active.session.name}
+          </Text>
+          <Text className="text-[12px] leading-4 tabular-nums text-muted-foreground">
+            {t("home.resumeSub", { done: active.done, total: active.setCount })} · {clockText(elapsed)}
+          </Text>
+        </View>
+        <Icon icon={ChevronRight} size={18} tone="muted-foreground" />
+      </View>
+    </Press>
   );
 }

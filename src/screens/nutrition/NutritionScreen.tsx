@@ -214,13 +214,13 @@ export function NutritionScreen() {
     setRemove(null);
     if (!r.ok) return toast.error(t("screen.deleteFailed"));
     toast.success(t("screen.deleted"));
-    dataChanged();
+    dataChanged("logs");
   };
   const separate = async (f: FoodItem, on: boolean) => {
     const r = await setFoodSeparate(actionCtx(), { id: f.id, ts: f.ts, separate: on }).catch(() => ({ ok: false as const, error: "" }));
     if (!r.ok) return toast.error(t("screen.changeFailed"));
     toast.success(on ? t("screen.nowCounts", { title: f.title }) : t("screen.rematched", { title: f.title }));
-    dataChanged();
+    dataChanged("logs");
   };
 
   return (

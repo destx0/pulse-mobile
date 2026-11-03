@@ -10,6 +10,7 @@ import { SCORING_VERSION } from "@/pipeline";
 import { APP_VERSION, getMore } from "@/queries/settings";
 import { LinkList, LinkListSkeleton, MORE_COLUMN, type LinkListRow } from "@/ui/shells/LinkList";
 import { PageShell } from "@/ui/shells/PageShell";
+import { QueryError } from "@/ui/shells/QueryError";
 import { useScreen } from "../useScreen";
 import { About } from "./About";
 import { SCORE_DOCS } from "./howItWorksContent";
@@ -49,9 +50,11 @@ export function MoreScreen() {
   const settings = settingsRows();
   const live = liveLinks();
   const gym = gymRows();
-  const { data: vm } = useScreen(getMore, MORE_KEY);
+  const { data: vm, error, reload } = useScreen(getMore, MORE_KEY);
   if (!vm)
-    return (
+    return error ? (
+      <QueryError error={error} reload={reload} />
+    ) : (
       <PageShell loading title={t("title")}>
         <View className={MORE_COLUMN}>
           <LinkListSkeleton title={t("group.accountSettings")} rows={settings} />

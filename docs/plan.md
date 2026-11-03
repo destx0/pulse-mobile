@@ -1,5 +1,9 @@
 # Pulse Mobile: a React Native app with every byte on the phone
 
+> **Status: historical (2026-10-10).** This is the first plan, kept for context. Google OAuth, drizzle, Maestro and
+> React Native Testing Library never shipped; the app is Health Connect only and reads its data on the phone. Current
+> plans: `docs/rewrite-plan.md` and `docs/engine-plan.md`; the doc index is `docs/README.md`.
+
 Status: plan, written 2026-10-10 for a new repository `pulse-mobile`. Nothing implemented. Written so that a fresh
 Claude Code session can run the work streams below with several subagents in parallel.
 

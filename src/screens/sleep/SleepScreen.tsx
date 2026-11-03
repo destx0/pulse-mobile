@@ -22,6 +22,7 @@ import { ReasonPlaceholder } from "@/ui/metrics/ReasonPlaceholder";
 import { ScoreDial } from "@/ui/metrics/ScoreDial";
 import { SleepStages } from "@/ui/metrics/SleepStages";
 import { DetailShell } from "@/ui/shells/DetailShell";
+import { QueryError } from "@/ui/shells/QueryError";
 import { useSelectedDay } from "@/ui/shells/DateSwitcher";
 import { SectionShell } from "@/ui/shells/SectionShell";
 import { useShellCalendar } from "@/ui/shells/ShellStatus";
@@ -64,10 +65,10 @@ export const sleepKey = (d: string) => ["sleep", d] as const;
 export function SleepScreen() {
   const [d] = useSelectedDay();
   const { timeZone } = useShellCalendar();
-  const { data } = useScreen(sleepQuery(d), sleepKey(d));
+  const { data, error, reload } = useScreen(sleepQuery(d), sleepKey(d));
   // The web shows its skeleton on every navigation: another day's data is not this day's.
   const shown = data?.vm.day === d && timeZone ? data : undefined;
-  return shown && timeZone ? <Sleep vm={shown.vm} weekly={shown.weekly} timeZone={timeZone} /> : <SleepSkeleton />;
+  return shown && timeZone ? <Sleep vm={shown.vm} weekly={shown.weekly} timeZone={timeZone} /> : error ? <QueryError error={error} reload={reload} /> : <SleepSkeleton />;
 }
 
 function Sleep({ vm, weekly, timeZone }: { vm: SleepPageVM; weekly: TrendViewVM[]; timeZone: string }) {

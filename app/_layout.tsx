@@ -7,7 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
 import { colorScheme } from "nativewind";
-import { Platform, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 import { enableFreeze } from "react-native-screens";
 import { Barlow_500Medium } from "@expo-google-fonts/barlow/500Medium";
 import { Barlow_600SemiBold } from "@expo-google-fonts/barlow/600SemiBold";
@@ -23,7 +23,7 @@ import { useNotificationDeepLinks, useTabLinks } from "@/background/links";
 import { Opening } from "@/screens/Opening";
 import { ScreenError } from "@/screens/ScreenError";
 import { ShellData } from "@/screens/ShellData";
-import { boot, useApp } from "@/state/app";
+import { boot, retryBoot, useApp } from "@/state/app";
 import { AppProviders } from "@/ui/providers";
 import { useTheme } from "@/ui/theme";
 
@@ -60,8 +60,11 @@ export default function RootLayout() {
   return (
     <>
       {bootError && !opened ? (
-        <View className="flex-1 items-center justify-center bg-background p-6">
-          <Text className="text-destructive">{i18n.t("ui:app.bootDatabase", { error: bootError })}</Text>
+        <View className="flex-1 items-center justify-center gap-5 bg-background p-6">
+          <Text className="text-center text-destructive">{i18n.t("ui:app.bootDatabase", { error: bootError })}</Text>
+          <Pressable accessibilityRole="button" onPress={() => void retryBoot((theme) => colorScheme.set(theme as "light" | "dark" | "system"))} className="rounded-full border border-border px-5 py-3">
+            <Text className="text-[13px] font-semibold uppercase tracking-[0.08em] text-foreground">{i18n.t("common:actions.tryAgain")}</Text>
+          </Pressable>
         </View>
       ) : (
         ready && (

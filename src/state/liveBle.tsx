@@ -66,7 +66,12 @@ const DataCtx = React.createContext<LiveData>(EMPTY);
 
 /** Starts the controller and keeps the live slice. Mounted once, in AppProviders (src/ui/providers.tsx). */
 export function LiveBleProvider({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => liveBle.start(), []);
+  // Off the first frame: the controller reads storage, asks for the Bluetooth permission and creates a BleManager.
+  // A screen that opens sooner starts it from its own scan/connect (src/health/ble.ts prepare).
+  React.useEffect(() => {
+    const timer = setTimeout(() => liveBle.start(), 1500);
+    return () => clearTimeout(timer);
+  }, []);
   const snap = React.useSyncExternalStore(liveBle.subscribe, liveBle.getSnapshot, liveBle.getSnapshot);
   const [data, setData] = React.useState<LiveData>(EMPTY);
   const raw = React.useRef(emptyRaw());

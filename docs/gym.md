@@ -28,14 +28,15 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
 
 - **Every write is immediate.** The session row exists before the first set; a tick, an edit or a note is its own small
   write. Kill the app, reboot the phone, open it a day later: the workout and its sets are there, and the Gym tab offers
-  Resume. The rest timer is stored as a start instant and a length, so it comes back at the right point in the countdown,
-  and a "Rest over" notification is scheduled for its end, so a rest that finishes in a pocket is not missed.
+  Resume. A tick does not start a rest timer (the owner does not use one); a rest already stored on a session still draws
+  and counts its own clock. The screen does not wait for those writes: a tick and the rest bar draw in the tap's own
+  frame, then the write and the reload land behind them; a field is written only when its text changed.
 - **A template opens ready to tick.** Its sets carry the planned reps and the weight logged the last time that exercise
   was trained; tapping the previous cell copies that session's numbers.
 - **Set details.** Tap the set number for working / warmup / drop / failure, an RPE, a note, or to delete the set. Warmups
   are left out of volume, PRs and the +% change. Deleting a set or an exercise offers Undo.
 - **Supersets and order.** The exercise menu ties an exercise to the next one, moves it up or down, or opens its history.
-  Both exercises of a superset wear the badge, and a tick in the group starts no rest until the other has nothing left.
+  Both exercises of a superset wear the badge and keep their sets together in the list.
 - **Units per exercise.** The menu switches one exercise between kg and lb (as Strong does). Weight is stored in
   kilograms; the unit is only how it is typed and shown. Volume, records and the exercise page read in the same unit.
 - **The previous column** is the last session before this one with a ticked working set, by set number. A warmup-only
@@ -96,8 +97,8 @@ set renumbers the rest of that exercise.
 ## Limits
 
 - The gym does not feed Strain, Training Load or Recovery. That was a deliberate choice for this build.
-- The rest timer is in-app plus a local "Rest over" notification (Android 13+ asks for notification permission; with it
-  denied, the countdown is still correct when you come back, but nothing sounds in a pocket).
+- The rest timer is not started automatically: the owner does not use one. A session that already carries a rest still
+  draws its bar and counts it down (a "Rest over" notification is only scheduled for a rest that exists).
 - A superset keeps each exercise's sets together rather than interleaving A1, B1, A2, B2 as Strong's tracking page does.
 - No plate inventory per gym: the calculator uses the common kg and lb sets.
 

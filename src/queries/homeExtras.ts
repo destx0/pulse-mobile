@@ -132,11 +132,12 @@ export async function getHomeDashboard(day: string, ctx: QueryCtx, chosen: reado
   const isToday = day === today;
   const from = addDays(day < addDays(today, -29) ? day : addDays(today, -29), -36);
   const keys = await dashboardKeys(ctx, chosen);
-  const [rows, strength, stress] = await Promise.all([
+  const [rows, strength] = await Promise.all([
     loadDays(ctx, from, today),
     keys.includes("strength") ? strengthMinutes(ctx, from, today) : new Map<string, number>(),
-    keys.includes("stress") ? getStress(day, ctx) : null,
   ]);
+  // The stress line reuses the rows Home already has (its 30 days are inside this window).
+  const stress = keys.includes("stress") ? await getStress(day, ctx, rows) : null;
   const specs = statSpecs(rows.get(day), isToday, rows, strength);
   const keyStats = keys.map((key) => {
     const { pick, ...s } = specs[key];

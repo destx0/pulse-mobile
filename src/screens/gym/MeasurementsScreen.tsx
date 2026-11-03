@@ -20,10 +20,11 @@ import { DAY, formatDay } from "@/lib/format";
 import { localDay } from "@/lib/time";
 import { push } from "@/ui/navigate";
 import { ConfirmDialog, GymEmpty, MiniLine } from "./parts";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function MeasurementsScreen() {
   const { t } = useTranslation("gym");
-  const { data } = useScreen(getGymMeasurements, ["gym-measurements"]);
+  const { data, error, reload } = useScreen(getGymMeasurements, ["gym-measurements"]);
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const weight = data?.weight ?? [];
@@ -42,7 +43,7 @@ export function MeasurementsScreen() {
         </Press>
       }
       primary={
-        !data ? null : (
+        !data ? (error ? <QueryError compact error={error} reload={reload} /> : null) : (
           <View className="gap-6">
             <Press accessibilityRole="button" onPress={() => push("/scale")} className="flex-row items-center gap-3 rounded-xl bg-secondary px-3 py-3">
               <Icon icon={Scale} size={18} tone="foreground-secondary" />
@@ -118,7 +119,7 @@ export function MeasurementsScreen() {
       onConfirm={async () => {
         if (removing) await deleteMeasurement(actionCtx().store, removing);
         setRemoving(null);
-        dataChanged();
+        dataChanged("gym");
       }}
     />
     </View>
@@ -166,7 +167,7 @@ function AddMeasurement({ onDone }: { onDone: () => void }) {
           onPress={async () => {
             if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1000) return;
             await saveMeasurement(actionCtx().store, { day, kind, value: parsed });
-            dataChanged();
+            dataChanged("gym");
             onDone();
           }}
         >

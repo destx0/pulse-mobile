@@ -155,7 +155,11 @@ const DataCtx = React.createContext<ScaleData>(EMPTY);
 
 /** Starts the controller and keeps the scale slice. Mounted once, in AppProviders (src/ui/providers.tsx). */
 export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
-  React.useEffect(() => leFuScale.start(), []);
+  // Off the first frame: reading the remembered scale and creating a BleManager is not needed to paint Home.
+  React.useEffect(() => {
+    const timer = setTimeout(() => leFuScale.start(), 1500);
+    return () => clearTimeout(timer);
+  }, []);
   const snap = React.useSyncExternalStore(leFuScale.subscribe, leFuScale.getSnapshot, leFuScale.getSnapshot);
   const profile = useApp((s) => s.profile);
   const [athlete, setAthleteState] = React.useState(false);
@@ -210,7 +214,7 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
     if (dataTimer.current) return;
     dataTimer.current = setTimeout(() => {
       dataTimer.current = null;
-      dataChanged();
+      dataChanged("logs");
     }, 800);
   }, []);
 
@@ -425,7 +429,7 @@ export function LeFuScaleProvider({ children }: { children: React.ReactNode }) {
       const at = wallMinute(r.at, c.timeZone);
       const result = await logEntry(c, { kind: "weight", kg: r.frame.weightKg, fatPct, at });
       if (result.ok) {
-        dataChanged();
+        dataChanged("logs");
         setSave("saved");
         setSavedAt(Date.now());
         queueHealth({ atMs: fromWall(at, c.timeZone) * 1000, kg: r.frame.weightKg, fatPct }, true);

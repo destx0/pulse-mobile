@@ -21,7 +21,9 @@ import { useBodyShown, useScreenReady } from "./useScreenReady";
 
 export type DetailShellProps = {
   title: string;
-  subtitle?: string;
+  /** A plain line, or a component that updates on its own (a workout's clock): the page below it then never renders
+   *  for a second hand. */
+  subtitle?: ReactNode;
   info?: InfoContent;
   /** Overrides what Back does (a screen that asks before leaving). */
   onBack?: () => void;

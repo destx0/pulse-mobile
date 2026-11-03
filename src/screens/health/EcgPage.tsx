@@ -10,14 +10,16 @@ import { TaskPage } from "@/ui/shells/TaskPage";
 import { Text } from "@/ui/Text";
 import { useScreen } from "../useScreen";
 import { bpm, rhythmDisclaimer } from "./HeartRhythm";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function EcgPage() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { t } = useTranslation("health");
   // halo has no single-reading query: the reading comes from the Health Monitor's heart rhythm (ECGs from an older Google import).
-  const { data: shown } = useScreen(async (ctx) => (await getMonitor(ctx.today, ctx)).heartRhythm.ecg.find((e) => e.id === id) ?? null, ["ecgPage", id]);
+  const { data: shown, error, reload } = useScreen(async (ctx) => (await getMonitor(ctx.today, ctx)).heartRhythm.ecg.find((e) => e.id === id) ?? null, ["ecgPage", id]);
   return (
     <TaskPage title={t("title.ecgReading")}>
+      {error && !shown ? <QueryError compact error={error} reload={reload} /> : null}
       {/* Opened without a reading it knows (a bare link, or one Health Connect no longer has), it says so: before, the page was empty. */}
       {shown === null && <EmptyState body={t("rhythm.pageEmpty")} />}
       {shown && (

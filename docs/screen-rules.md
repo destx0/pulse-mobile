@@ -1,5 +1,8 @@
 # Screen rules (Phase 2 and after)
 
+> **Status: historical (2026-10).** Written for the first port: `src/google`, `seededCtx` and F6 no longer exist. The
+> visual rules still hold; the current layout and data rules are in `AGENTS.md` and `docs/design/spec.md`.
+
 Every screen stream follows these. A stream brief adds its own scope on top.
 
 ## Look: exactly the Pulse PWA

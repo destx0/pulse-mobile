@@ -10,10 +10,11 @@ import { DAY, formatDay } from "@/lib/format";
 import { push } from "@/ui/navigate";
 import { Block, GymEmpty, SessionRow } from "./parts";
 import { GymSkeleton } from "./GymSkeleton";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function HistoryScreen() {
   const { t } = useTranslation("gym");
-  const { data } = useScreen(getGymHistory, ["gym-history"]);
+  const { data, error, reload } = useScreen(getGymHistory, ["gym-history"]);
 
   return (
     <DetailShell
@@ -24,7 +25,7 @@ export function HistoryScreen() {
       loading={!data}
       bodySkeleton={<GymSkeleton />}
       primary={
-        !data ? null : data.months.length ? (
+        !data ? (error ? <QueryError compact error={error} reload={reload} /> : null) : data.months.length ? (
           <View className="gap-6">
             {data.months.map((month) => (
               <Block key={month.month} title={formatDay(`${month.month}-01`, DAY.monthYear)}>

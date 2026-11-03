@@ -7,6 +7,8 @@ describe("isDeadConnection", () => {
     expect(isDeadConnection(new Error("Call to function 'NativeStatement.runAsync' has been rejected. AccessClosedResourceException"))).toBe(true);
     expect(isDeadConnection(new Error("UNIQUE constraint failed: daily_metrics.day"))).toBe(false);
     expect(isDeadConnection(new Error("Health Connect is not available"))).toBe(false);
+    expect(isDeadConnection(new Error("Call to function 'NativeDatabase.execAsync' has been rejected.\n→ Caused by: database is locked"))).toBe(false);
+    expect(isDeadConnection("SQLITE_BUSY: database is locked")).toBe(false);
     expect(isDeadConnection("NativeDatabase closed")).toBe(true);
   });
 });

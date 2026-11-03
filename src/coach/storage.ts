@@ -7,6 +7,7 @@ import type { UIMessage } from "ai";
 import * as SecureStore from "expo-secure-store";
 import { appStore } from "@/state/app";
 import { CHAT_PAGE, titleOf, type ChatCursor, type ChatRow } from "./chats";
+import { API_KEY, SETUP_KEY } from "./keys";
 
 /** What the screens may know about the setup: never the key itself. */
 export type CoachSetup = {
@@ -20,8 +21,6 @@ export type CoachSetup = {
   baseUrl: string | null;
 };
 
-const SETUP_KEY = "pulse.coach.setup";
-const API_KEY = "pulse.coach.apiKey";
 const EMPTY: CoachSetup = { provider: null, model: null, last4: null, consent: false, instructions: null, autoAnalysis: true, baseUrl: null };
 
 const listeners = new Set<() => void>();

@@ -96,7 +96,7 @@ export function EditDashboardPage({ keys: rawKeys, empty: rawEmpty }: { keys?: s
     const r = await dashboardDefault(queryCtx())
       .then((defaults) => saveDashboard({ keys: shown }, defaults))
       .catch(() => ({ ok: false as const, error: "storage" }));
-    if (r.ok) dataChanged();
+    if (r.ok) dataChanged("display");
     setSaving(false);
     if (!r.ok) {
       haptic.error();

@@ -199,7 +199,7 @@ export function CheckInPage() {
       return setSaveError(true);
     }
     // The check-in feeds stage 2 (journal impact, Insights, the Monitor's context): rescore, as halo does.
-    dataChanged();
+    dataChanged("journal");
     void refresh();
     setDone(true); // the Saved screen plays the success haptic
   };

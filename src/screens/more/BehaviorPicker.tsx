@@ -140,6 +140,6 @@ export function BehaviorPicker({ tags, initial, selected, onChange }: { tags: Be
 /** Saves a selection; the error copy the two hosts show. */
 export async function saveSelection(selected: Set<string>): Promise<string | null> {
   const r = await saveBehaviors(actionCtx(), { tags: [...selected] }).catch(() => ({ ok: false as const, error: "network" }));
-  if (r.ok) dataChanged();
+  if (r.ok) dataChanged("journal");
   return r.ok ? null : r.error === i18n.t("errors:journal.tooManyBehaviours", { count: MAX_TAGS }) ? i18n.t("more:behaviours.tooMany") : i18n.t("more:behaviours.saveFailed");
 }

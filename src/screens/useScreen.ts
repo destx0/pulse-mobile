@@ -4,6 +4,7 @@ import type { QueryCtx } from "@/queries/ctx";
 import { dataChanged, dataVersion, queryCtx, useDataVersion } from "@/state/app";
 import { useScreenReady } from "../ui/shells/useScreenReady";
 import { keepEqual } from "./keepEqual";
+import { cache, loading, cacheListeners, MAX_ENTRIES, subscribeCache, type Entry } from "./screenCache";
 
 export { dataChanged, useDataVersion };
 
@@ -13,23 +14,17 @@ const ctxOf = async (): Promise<QueryCtx> => queryCtx();
 /**
  * Screen results kept in memory, keyed by the screen's key (`[id, ...params]`). A screen opened again renders its last
  * result in the first frame, with no skeleton, and refreshes it in the background when the data changed (`dataChanged`)
- * or the result is older than FRESH_MS (clock-relative values like "today" and "11m ago").
+ * or the result is older than FRESH_MS (clock-relative values like "today" and "11m ago"). The map lives in
+ * screenCache.ts so a source switch can drop it without importing this hook.
+ *
+ * A result this old is reloaded when its screen is next focused. Most of what a screen shows is day-granular, so a
+ * minute was too eager: every return to a tab after a minute re-ran the whole query. Clock-relative copy has its own
+ * subscriptions (the live heart rate, the sync status); a screen that really needs a beat can pass `freshMs`.
  */
-type Entry = { data: unknown; version: number; at: number; /** The language its text was written in: a result in another language is never shown. */ lng: string };
-const cache = new Map<string, Entry>();
-const loading = new Map<string, { p: Promise<void>; version: number }>();
-const cacheListeners = new Set<() => void>();
-const FRESH_MS = 60_000;
-// ponytail: a plain size cap, oldest first; a byte budget if results ever grow large.
-const MAX_ENTRIES = 100;
-
-const subscribeCache = (l: () => void) => {
-  cacheListeners.add(l);
-  return () => cacheListeners.delete(l);
-};
+const FRESH_MS = 5 * 60_000;
 
 const sameLanguage = (e: Entry | undefined): e is Entry => !!e && e.lng === i18n.language;
-const fresh = (e: Entry | undefined): e is Entry => sameLanguage(e) && e.version === dataVersion() && Date.now() - e.at < FRESH_MS;
+const fresh = (e: Entry | undefined, ms = FRESH_MS): e is Entry => sameLanguage(e) && e.version === dataVersion() && Date.now() - e.at < ms;
 
 /**
  * Runs `query` for `k` and caches its result. A load already running for this data version is joined; one started
@@ -46,6 +41,8 @@ function load(k: string, query: (ctx: QueryCtx) => Promise<unknown>): Promise<vo
     .then(query)
     .then((data) => {
       if (__DEV__) console.info(`[screen] ${k} loaded ms=${Math.round(performance.now() - at)}`);
+      // A write (or a source switch) landed while this read ran: its rows may be from the old version/store.
+      if (dataVersion() !== started) return;
       const prev = cache.get(k);
       if (prev && prev.version > started && prev.lng === lng) return;
       cache.delete(k);
@@ -95,11 +92,12 @@ export type ScreenKey = readonly [string, ...unknown[]];
 export type ScreenState<T> = { data?: T; error?: Error; loading: boolean; reload: () => void };
 
 /** `eager`: show the result as soon as it is read, without waiting for the opening transition to end (a small read on a light page). */
-export function useScreen<T>(query: (ctx: QueryCtx) => Promise<T>, key: ScreenKey, opts?: { eager?: boolean }): ScreenState<T> {
+export function useScreen<T>(query: (ctx: QueryCtx) => Promise<T>, key: ScreenKey, opts?: { eager?: boolean; freshMs?: number }): ScreenState<T> {
   const k = cacheKey(key);
   const ready = useScreenReady();
   const v = useDataVersion(ready);
   const entry = useSyncExternalStore(subscribeCache, () => cache.get(k));
+  const ms = opts?.freshMs ?? FRESH_MS;
   // A result in memory when the screen mounted shows at once; a cold one waits for the opening transition to end, so
   // the first render of the page does not land mid-slide. Once shown, results keep showing (a blurred screen too).
   const [settled, setSettled] = useState(() => !!opts?.eager || cache.has(k));
@@ -113,7 +111,7 @@ export function useScreen<T>(query: (ctx: QueryCtx) => Promise<T>, key: ScreenKe
   }, [k]);
 
   useEffect(() => {
-    if (fresh(cache.get(k))) return;
+    if (fresh(cache.get(k), ms)) return;
     let live = true;
     load(k, query).catch((e: unknown) => live && setError({ k, error: e instanceof Error ? e : new Error(String(e)) }));
     return () => {
@@ -121,8 +119,8 @@ export function useScreen<T>(query: (ctx: QueryCtx) => Promise<T>, key: ScreenKe
     };
     // Inline queries change identity each render; their dependencies are in the key. `ready` re-checks on focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [k, v, ready, tick]);
+  }, [k, v, ready, tick, ms]);
 
   const shown = sameLanguage(entry) && settled ? (entry.data as T) : undefined;
-  return { data: shown, error: error?.k === k ? error.error : undefined, loading: !fresh(entry), reload };
+  return { data: shown, error: error?.k === k ? error.error : undefined, loading: !fresh(entry, ms), reload };
 }

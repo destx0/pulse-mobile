@@ -151,6 +151,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 class LiveHeartRate {
   private manager: BleManager | null = null;
   private started = false;
+  /** The boot in flight: a screen that opens before the deferred start still gets a manager. */
+  private booting: Promise<void> | null = null;
   private loaded = false;
   private radio: BleRadio = "unknown";
   private permission: BlePermission = "unknown";
@@ -273,7 +275,7 @@ class LiveHeartRate {
     this.started = true;
     this.wasForeground = this.foreground();
     AppState.addEventListener("change", (s) => this.onAppState(s));
-    void this.boot();
+    this.booting = this.boot();
   }
 
   private async boot() {
@@ -455,6 +457,9 @@ class LiveHeartRate {
 
   /** Permission, then the radio: true when a scan or connection can start now. Prompts for whichever is missing. */
   private async prepare(): Promise<boolean> {
+    // The provider defers start() off the first frame; a person who opens the screen straight away still gets a manager.
+    if (!this.started) this.start();
+    if (this.booting) await this.booting;
     if (!this.manager) {
       this.emit();
       return false;

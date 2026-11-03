@@ -14,8 +14,9 @@ const STREAK_MAX_DAYS = 400;
  */
 export async function getWearStreak(ctx: QueryCtx): Promise<{ days: number; asOf: string } | null> {
   const today = ctx.today;
-  const rows = await ctx.store.scoresIn({ from: addDays(today, -STREAK_MAX_DAYS), to: today });
-  const byDay = new Map(rows.map((r) => [r.day, r.strain]));
+  // The streak needs three numbers a day, not the day's 12 KB of scores: wornDays reads them in SQLite.
+  const rows = await ctx.store.wornDays({ from: addDays(today, -STREAK_MAX_DAYS), to: today });
+  const byDay = new Map(rows.map((r) => [r.day, r]));
   let asOf: string | null = null;
   let days = 0;
   for (let d = today; d === today || byDay.has(d); d = addDays(d, -1)) {

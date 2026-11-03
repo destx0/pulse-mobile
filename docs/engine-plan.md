@@ -1,6 +1,7 @@
 # Pulse engine: plan
 
-Status: Phases 0 to 8 in code on branch `engine` (2026-10-14, SCORING_VERSION 24, IMPORT_VERSION 4). Left: try it on the phone (Phase 3 step 4), then fast-forward main and release 0.3.0. Written so a fresh Claude Code session can start at Phase 0 and
+Status: Phases 0 to 8 are in code (2026-11-03: SCORING_VERSION 30, IMPORT_VERSION 8). The replaced halo scorers still run
+beside the engine; deleting them is the remaining Phase 8 work (see `docs/audits/2026-11-03-decisions-audit.md`). Written so a fresh Claude Code session can start at Phase 0 and
 work through the phases in order, one or two per session.
 
 ## What and why

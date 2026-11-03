@@ -11,7 +11,7 @@ import { syncHealthConnect } from "@/health/sync";
 import { timed } from "@/lib/perf";
 import { localDay } from "@/lib/time";
 import { setForeground } from "@/lib/yield";
-import { runPipeline } from "@/pipeline";
+import { runPipeline, SCORING_VERSION } from "@/pipeline";
 import { notifyAfterRun } from "./alerts";
 import { maintainStorage } from "./maintenance";
 import { releaseLock, takeLock, waitForLock, type RunOwner } from "./lock";
@@ -24,6 +24,8 @@ export type RunSyncOptions = {
   onProgress?: (step: string, done: number, total: number) => void;
   /** Wait for the other owner's run to end instead of skipping (the app does; a background task's window is short). */
   waitIfLocked?: boolean;
+  /** Score even when the import found nothing new (a profile edit, a manual Sync now, a source switch). */
+  force?: boolean;
 };
 
 export type RunSyncResult = {
@@ -34,6 +36,8 @@ export type RunSyncResult = {
   warnings: string[];
   /** Health Connect had nothing new, so nothing was read (scoring still ran): the last read's warnings stand. */
   unchanged?: true;
+  /** The pipeline ran (or would have written something). False when an unchanged sync could skip it. */
+  scored?: boolean;
 };
 
 /** How long the app waits for a background run before giving up and using what is on disk. */
@@ -96,11 +100,17 @@ async function run(store: Store, profile: Profile, source: Source, opts: RunSync
         await appendLog({ at: t0, result: "ok", ms: Date.now() - t0, note: `app sync: ${flags.length ? flags.join(", ") : "recent days"}` });
       }
     }
-    await timed(`pipeline (${opts.owner})`, () => runPipeline(store, profile, { today: localDay(Date.now() / 1000, opts.timeZone), onProgress: opts.onProgress }));
+    const today = localDay(Date.now() / 1000, opts.timeZone);
+    // An unchanged import with today already scored and nothing dirty would only replay the same fold: skip it. A
+    // profile edit, a manual sync or a source switch forces it (opts.force); a journal answer marks the day dirty. The
+    // demo source has no import, so its rows change only when the seed or a write says so.
+    const imported = source === "health_connect" && !unchanged;
+    const scored = !!opts.force || imported || (await store.needsScoring(today, SCORING_VERSION));
+    if (scored) await timed(`pipeline (${opts.owner})`, () => runPipeline(store, profile, { today, onProgress: opts.onProgress }));
     // After scoring, so the day that just aged out was scored from its raw samples. A failure here costs space, not
     // data: the sync itself has succeeded, and the next run tries again.
     await timed(`maintenance (${opts.owner})`, () => maintainStorage(store, Date.now() / 1000)).catch((e) => console.warn("[maintenance]", e instanceof Error ? e.message : String(e)));
-    return { ran: true, warnings, ...(unchanged && { unchanged: true as const }) };
+    return { ran: true, warnings, scored, ...(unchanged && { unchanged: true as const }) };
   } finally {
     await releaseLock(opts.owner);
     await notifyAfterRun(store, opts.timeZone);

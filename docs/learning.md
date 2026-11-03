@@ -766,6 +766,10 @@ the same after each sync and scoring run (`src/background/maintenance.ts`):
   first time compaction frees anything, then uses `incremental_vacuum`. `wal_checkpoint(truncate)` shrinks the
   write-ahead log a first import grew. Checked against SQLite in Node (`node:sqlite`): a 40 MB file with 30 MB freed
   went back to 10 MB.
+- A later open reads `journal_mode` before it sets it: `journal_mode = wal` takes an exclusive lock and does not always
+  wait on `busy_timeout`, so a database already in WAL skips it and runs only the connection-local pragmas
+  (`synchronous`, `foreign_keys`). That is what lets boot open the store while the background task is writing; a
+  locked open is retried five times after a 10 s busy timeout, and the boot error screen offers Try again.
 - Settings › Your data shows the database's size (`Store.storageBytes()`, page count times page size).
 
 ```mermaid
@@ -951,6 +955,17 @@ Picking the file needs no new package: `expo-file-system` (SDK 57) exports `File
 `expo-document-picker` is not installed. The picker returns a temporary copy, which is read once and parsed in
 JavaScript; nothing is copied into the app's document directory.
 
+## The workout page draws before it writes
+
+A tick is drawn in the row first (`SessionScreen`); the SQLite write and the `dataChanged` reload follow behind it, so a
+tap lands in the frame it happens. A tick starts no rest timer; a rest already stored on a session draws in the tap's
+own frame and counts itself. Finish and Discard wait for any write in flight before they close the workout, so a late
+rest adjustment cannot reopen a finished session. The header's clock is its own leaf (`SessionClock`) and the rest bar
+counts on its own, so a running workout no longer re-renders every set row and `TextInput` once a second; the Gym tab's
+resume card ticks only while that tab is in front. A set's fields save only when their text changed, which stops
+Android's submit-then-blur pair from writing and reloading twice. The read starts at mount (`eager`) and the Gym tab
+prefetches it on the tap, so a cold open has its sets by the time the slide ends.
+
 ## Two Android layout traps the gym screens hit
 
 NativeWind styles the core components it maps (View, Text, Pressable, TextInput, ScrollView…), but not every one:
@@ -980,3 +995,74 @@ The rest bar is driven by a 1 Hz value, so it interpolates: a `scaleX` transform
 between the two numbers the clock actually knows, which reads as a continuous sweep and never relayouts the card.
 `transformOrigin: "left"` anchors it. A jump larger than two ticks (the phone slept, or ±15 was pressed) snaps instead,
 so the bar never crawls toward a number that is already wrong.
+
+## Scores are cached per day, and a log does not clear them
+
+The screens' memo (`src/data/memo.ts`) used one version for every read, so a water log, a gym set or a journal answer
+threw away the parsed score rows. One score day is about 12 KB of JSON in 16 columns, and Home read 156 day-rows
+(three overlapping ranges) and Health 463; the shell then re-read 400 days for the streak. The memo now has two
+versions: `dataChanged("scores")` (a pipeline run, a profile edit) clears the score cache, while `dataChanged("logs" |
+"gym" | "journal" | "display")` bumps only the screen version. Score rows are kept by day for one scores version, so a
+range inside a range already read never touches SQLite or `JSON.parse` again; the queries that read the same days were
+also given the same window (Home's two, Healthspan's and Fitness's) and `loadDays` is memoised per data version in the
+query context. Measured on the 180-day demo, in Node: Home 41 → 24 ms with 19 → 14 store calls, Health 80–203 → 35 ms
+with 18 → 13 calls, and the streak after a log 25 ms → 0 calls. The per-day score cache is `scoresIn`'s; a scoring run
+still pays for the days it reads.
+
+The shell's streak and first day follow the scores version (`useScoresVersion`), not the screen version, so a gym set no
+longer reads 400 days for a pill that did not change. The streak itself reads `wornDays`: SQLite's `json_extract` pulls
+`hrCount`, `hrMinutesAm` and `hrMinutesPm` out of `strain`, so 400 days cross to JS as small rows, not 4.8 MB of score
+JSON. The calendar's time zone comes from the profile immediately, so Home and Sleep no longer wait for that read to
+paint.
+
+## The sample data has its own database
+
+"Explore with sample data" used to `clearAll()` the one database: journal, logs and custom behaviours went with the
+health rows, and the confirmation only mentioned the import. The demo now opens `pulse-demo.db` (`DEMO_DB` in
+`src/data/db.ts`), seeds it, and switches `state.store` to it; leaving the demo opens `pulse-store.db` again, with the
+person's own rows untouched. `swapStore` drops the memo and the loadDays caches, re-registers the store for the
+background task and re-reads LeetCode's snapshot. The old `pulse.ownProfile` key is read once as a fallback for a
+profile saved by an earlier build. Both stores are regular databases: there is no export/import between them, so a
+schema change has to reach both through `openStore`.
+
+## Deleting everything deletes everything
+
+`clearAll` deliberately keeps `coach_chats` (the coach had its own file in halo), and the API key and setup live in
+SecureStore and AsyncStorage. `reset()` now opens both databases, clears them (health, journal, logs, gym, LeetCode
+snapshots), calls `resetCoachState` on each (chats, `pulse.coach.setup`, the key), removes the preference keys listed in
+`PREFERENCES`, and swaps to the empty real store. It takes the run lock (`withRunLock`) so a background sync cannot write
+during the wipe. The run lock is also held while the demo seeds and while a profile is restored on leaving the demo.
+
+## Migrations stop the open instead of failing silently
+
+`openDbOnce` used to run every `ALTER` with `.catch(() => {})`. It now reads `pragma user_version`, applies only the
+migrations a database has not seen, accepts SQLite's duplicate-column error (the base schema carries some columns), and
+throws anything else. `verifySchema` then checks the columns the app reads unconditionally; a failure reaches the boot
+error screen with Try again. A database from before the tracking runs the list once, sees duplicates, and records the
+version.
+
+## One Dimensions subscription for every Text
+
+Every `<Text>` called `useWindowDimensions()` and parsed its class string with regexes and a colour regex. On the
+owner's 361 dp phone the narrow-phone type scale is active, so no text took the fast path. A `TypeScaleProvider` at the
+root holds one subscription and a context; `readFont` and `hasColorClass` have a Map keyed by the class string; the
+scaled style and the style array are memoised. Text outside the provider (the boot error) falls back to
+`Dimensions.get`.
+
+## The launch run waits for the first screen
+
+Boot used to start the import and scoring as soon as the store opened, while Home mounted and the opening played. The
+run is 12 ms slices, so it kept the first scroll and taps waiting. `scheduleRun` now waits 1.2 s and
+`InteractionManager.runAfterInteractions`; the background registration, release check and LeetCode snapshot load on an
+idle callback after the first paint; the two BLE controllers start after 1.5 s (a screen that opens sooner starts them
+from its own scan/connect, `prepare` now waits for the boot). After the sync, `runSync` asks `needsScoring(today,
+SCORING_VERSION)`: an unchanged import with today already scored, no intraday-dirty day and no stale row skips the
+pipeline, and the app skips `dataChanged` when nothing was scored. Sync now, a profile edit and a source switch pass
+`force: true`. The opening plays its full beat on the first launch and a 180 ms fade after that (`pulse.opening.seen`).
+
+## The database has a contract test
+
+`src/data/db.contract.test.ts` runs the real `SqliteStore` SQL against `node:sqlite` through a small
+`expo-sqlite` shim (exec, get, all, run, prepare). It checks day order, JSON round-trips, journal replacement, logged
+entry ranges and order, `needsScoring`, and that `clearAll` keeps the coach's chats. It does not replace the
+MemoryStore tests; it catches the SQL a MemoryStore test cannot.

@@ -30,6 +30,7 @@ import { ScoreDial } from "@/ui/metrics/ScoreDial";
 import { SleepCard } from "@/ui/metrics/SleepCard";
 import { TickScale } from "@/ui/metrics/TickScale";
 import { EmptyState } from "@/ui/shells/EmptyState";
+import { QueryError } from "@/ui/shells/QueryError";
 import { InfoCardTrigger } from "@/ui/shells/InfoButton";
 import { InfoDialog } from "@/ui/shells/InfoDialog";
 import { MetricState } from "@/ui/shells/MetricState";
@@ -96,7 +97,7 @@ const homeKey = (d: string) => ["home", d] as const;
 export function HomeScreen() {
   const [d] = useSelectedDay();
   const { timeZone } = useShellCalendar();
-  const { data } = useScreen(homeQuery(d), homeKey(d));
+  const { data, error, reload } = useScreen(homeQuery(d), homeKey(d));
   const keys = useScreen(async (ctx) => dashboardKeys(ctx, await dashboardChoice()), ["home-keys"]).data;
   // The web shows its skeleton on every navigation: another day's data is not this day's.
   const vm = data?.day === d && timeZone ? data : undefined;
@@ -124,7 +125,7 @@ export function HomeScreen() {
       ]);
     }, [day, today, ready]),
   );
-  return vm && timeZone ? <Home vm={vm} timeZone={timeZone} /> : <HomeSkeleton stats={keys} />;
+  return vm && timeZone ? <Home vm={vm} timeZone={timeZone} /> : error ? <QueryError error={error} reload={reload} /> : <HomeSkeleton stats={keys} />;
 }
 
 function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {

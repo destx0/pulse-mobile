@@ -7,6 +7,7 @@ import { LiveBleProvider } from "@/state/liveBle";
 import { LeFuScaleProvider } from "@/state/lefuScale";
 import { LiveHrTicker } from "@/state/liveHr";
 import { ShellCalendarProvider } from "./shells/ShellStatus";
+import { TypeScaleProvider } from "./Text";
 import { ToastHost } from "./Toast";
 
 /**
@@ -24,13 +25,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <ShellCalendarProvider value={calendar}>
-          <LiveBleProvider>
-            <LeFuScaleProvider>{children}</LeFuScaleProvider>
-          </LiveBleProvider>
-          <ToastHost />
-          <LiveHrTicker />
-        </ShellCalendarProvider>
+        {/* One Dimensions subscription for every <Text>: the narrow-phone type scale no longer costs one per node. */}
+        <TypeScaleProvider>
+          <ShellCalendarProvider value={calendar}>
+            <LiveBleProvider>
+              <LeFuScaleProvider>{children}</LeFuScaleProvider>
+            </LiveBleProvider>
+            <ToastHost />
+            <LiveHrTicker />
+          </ShellCalendarProvider>
+        </TypeScaleProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

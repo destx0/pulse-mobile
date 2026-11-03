@@ -15,6 +15,7 @@ import { SectionShell } from "@/ui/shells/SectionShell";
 import { Text } from "@/ui/Text";
 import { toast } from "@/ui/Toast";
 import { cn } from "@/ui/cn";
+import { QueryError } from "@/ui/shells/QueryError";
 
 type Method = "manual" | "automatic";
 const words = (hours: number) => durationWords(hours * 60);
@@ -65,12 +66,12 @@ export function SleepGoal() {
     { value: "automatic", label: t("sleepGoal.automatic") },
     { value: "manual", label: t("sleepGoal.manual") },
   ] as const;
-  const { data } = useScreen(sleepGoalView, ["sleep-goal"]);
+  const { data, error, reload } = useScreen(sleepGoalView, ["sleep-goal"]);
   const [method, setMethod] = useState<Method | null>(null);
   if (!data)
     return (
       <SectionShell variant="card" title={t("sleepGoal.title")}>
-        <Skeleton className="h-[52px] rounded-[14px]" />
+        {error ? <QueryError compact error={error} reload={reload} /> : <Skeleton className="h-[52px] rounded-[14px]" />}
       </SectionShell>
     );
   const shown = method ?? data.method;

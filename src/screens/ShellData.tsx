@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { loadCalendarMonth } from "@/actions/calendar";
 import { firstDay } from "@/queries/common";
 import { getWearStreak } from "@/queries/shell";
-import { queryCtx, refresh, useApp, useDataVersion } from "@/state/app";
+import { queryCtx, refresh, useApp, useScoresVersion } from "@/state/app";
 import { ShellCalendarProvider, ShellSyncProvider, useShellCalendar, type ShellCalendar, type ShellSync } from "@/ui/shells/ShellStatus";
 
 const loadMonth = (month: string) => loadCalendarMonth(queryCtx(), month);
@@ -17,7 +17,10 @@ type Read = { today: string; firstDay: string | null; timeZone: string; streak: 
 
 export function ShellData({ children }: { children: ReactNode }) {
   const root = useShellCalendar();
-  const version = useDataVersion();
+  // The streak and the first day follow scores, not every water log or gym set; only a scoring run reads them again.
+  const version = useScoresVersion();
+  // The person's zone is known from the profile, so the calendar has it before the first database read finishes.
+  const profileTimeZone = useApp((s) => s.profile?.timeZone);
   const status = useApp((s) => s.status);
   const lastSyncTs = useApp((s) => s.sync.lastSyncTs);
   const error = useApp((s) => s.error);
@@ -55,7 +58,10 @@ export function ShellData({ children }: { children: ReactNode }) {
       syncNow: refresh,
     };
   }, [data, syncing, error, lastSyncTs, source, firstImport, progress]);
-  const value = useMemo<ShellCalendar>(() => ({ today: data?.today ?? root.today, firstDay: data?.firstDay, timeZone: data?.timeZone, loadMonth }), [data?.today, data?.firstDay, data?.timeZone, root.today]);
+  const value = useMemo<ShellCalendar>(
+    () => ({ today: data?.today ?? root.today, firstDay: data?.firstDay, timeZone: data?.timeZone ?? profileTimeZone, loadMonth }),
+    [data?.today, data?.firstDay, data?.timeZone, root.today, profileTimeZone],
+  );
   return (
     <ShellCalendarProvider value={value}>
       <ShellSyncProvider value={sync}>{children}</ShellSyncProvider>

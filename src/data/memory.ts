@@ -213,6 +213,14 @@ export class MemoryStore implements Store {
     return days;
   }
 
+  async needsScoring(today: string, scoringVersion: number) {
+    if (this.dirty.size > 0) return true;
+    const row = this.scores.get(today);
+    if (!row || row.scoringVersion !== scoringVersion) return true;
+    for (const r of this.scores.values()) if (r.scoringVersion !== scoringVersion) return true;
+    return false;
+  }
+
   async allMetrics() {
     return copy([...this.metrics.values()]);
   }
@@ -254,6 +262,12 @@ export class MemoryStore implements Store {
   }
   async scoresIn(range: DayRange) {
     return copy([...this.scores.values()].filter((r) => inRange(r.day, range)).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)));
+  }
+  async wornDays(range: DayRange) {
+    return [...this.scores.values()]
+      .filter((r) => inRange(r.day, range))
+      .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0))
+      .map((r) => ({ day: r.day, hrCount: r.strain?.hrCount ?? 0, hrMinutesAm: r.strain?.hrMinutesAm ?? 0, hrMinutesPm: r.strain?.hrMinutesPm ?? 0 }));
   }
   async putScores(row: ScoreRow) {
     this.scores.set(row.day, copy(row));

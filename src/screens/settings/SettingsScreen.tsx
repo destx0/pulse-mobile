@@ -18,6 +18,7 @@ import { GoalsSettings } from "@/screens/goals/GoalsSettings";
 import { LeetCodeSection } from "./LeetCodeSection";
 import { ProfileCard } from "./ProfileCard";
 import { ScaleSection } from "./Scale";
+import { QueryError } from "@/ui/shells/QueryError";
 
 type SectionId = "profile" | "source" | "app" | "live" | "scale" | "notifications" | "goals" | "leetcode";
 const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "scale", "notifications", "goals", "leetcode"];
@@ -86,9 +87,9 @@ function SectionSkeleton({ section }: { section: SectionId }) {
 
 /** The profile reads the Store (the learned max heart rate), so it is the one section that waits for a query; it skips the opening-transition wait, as it is a small read. */
 function ProfileSection() {
-  const { data } = useScreen((ctx) => getSettings(ctx), ["settings"], { eager: true });
+  const { data, error, reload } = useScreen((ctx) => getSettings(ctx), ["settings"], { eager: true });
   return !data ? (
-    <SectionSkeleton section="profile" />
+    error ? <QueryError compact error={error} reload={reload} /> : <SectionSkeleton section="profile" />
   ) : (
     <>
       <ProfileCard profile={data.profile} />

@@ -92,7 +92,9 @@ export async function getHome(day: string, ctx: QueryCtx, opts: HomeOptions = {}
   const isToday = day === today;
   const stripStart = day < addDays(today, -29) ? day : addDays(today, -29);
   const [rows, exs, defaults, weeklyTeaser, journal, ebSeries] = await Promise.all([
-    loadDays(ctx, addDays(stripStart, -30), today),
+    // The same window as getHomeDashboard (My Dashboard's averages need 36 days before the strip): one loadDays per
+    // version for both queries, not two overlapping ranges that miss the memo.
+    loadDays(ctx, addDays(stripStart, -36), today),
     exercisesBetween(ctx, day, day),
     dashboardDefault(ctx),
     latestReport(ctx, "week"),

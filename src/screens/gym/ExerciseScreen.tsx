@@ -14,11 +14,12 @@ import { DAY, formatDay } from "@/lib/format";
 import { loadText, toUnit, trimLoad } from "@/core/gym/load";
 import { push } from "@/ui/navigate";
 import { GymEmpty, MiniLine, StatTile, volumeText } from "./parts";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation("gym");
-  const { data } = useScreen((ctx) => getGymExercise(ctx, id), ["gym-exercise", id]);
+  const { data, error, reload } = useScreen((ctx) => getGymExercise(ctx, id), ["gym-exercise", id]);
   const unit = data?.exercise.unit ?? "kg";
   const oneRm = data?.record ? trimLoad(Math.round(toUnit(data.record.oneRm, unit) * 10) / 10) : null;
 
@@ -31,7 +32,7 @@ export function ExerciseScreen() {
       loading={!data}
       bodySkeleton={<View className="h-40" />}
       primary={
-        !data ? null : (
+        !data ? (error ? <QueryError compact error={error} reload={reload} /> : null) : (
           <View className="gap-8">
             {data.record ? (
               <Card className="gap-4 px-4 py-4">

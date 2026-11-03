@@ -20,6 +20,7 @@ import { Text } from "@/ui/Text";
 import { BODY } from "../settings/controls";
 import { toast } from "@/ui/Toast";
 import { useScreen } from "../useScreen";
+import { QueryError } from "@/ui/shells/QueryError";
 
 /** A button that opens the share sheet with one export. */
 function DownloadLink({ kind, format, busy, setBusy }: { kind: ExportKind; format: ExportFormat; busy: string | null; setBusy: (id: string | null) => void }) {
@@ -88,9 +89,9 @@ const BYTES_PER_MB = 1_000_000;
 
 export function YourDataScreen() {
   const { t } = useTranslation("more");
-  const { data } = useScreen(async (ctx) => ({ vm: await getYourData(ctx) }), ["yourData"]);
+  const { data, error, reload } = useScreen(async (ctx) => ({ vm: await getYourData(ctx) }), ["yourData"]);
   const [busy, setBusy] = useState<string | null>(null);
-  if (!data) return <Loading />;
+  if (!data) return error ? <QueryError error={error} reload={reload} /> : <Loading />;
   const { vm } = data;
   const link = (kind: ExportKind, format: ExportFormat) => <DownloadLink kind={kind} format={format} busy={busy} setBusy={setBusy} />;
 

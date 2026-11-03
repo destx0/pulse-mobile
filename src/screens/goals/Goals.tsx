@@ -27,6 +27,7 @@ import { SkeletonText } from "@/ui/Skeleton";
 import { Text } from "@/ui/Text";
 import { useTheme } from "@/ui/theme";
 import { ASIDE, BarLine, goalColor, GoalRowShell, UNDER_LABEL, WeekColumns, type Mark } from "./parts";
+import { QueryError } from "@/ui/shells/QueryError";
 
 export const GOALS_SETTINGS = "/settings?s=goals";
 
@@ -39,13 +40,13 @@ const DONE: Mark = { dir: "up", tone: "good" };
 /** The day's goals, scored once the phone's goals are read (the defaults would score the day wrongly until then). */
 function useGoalsDay(day: string) {
   const { goals, ready } = useGoals();
-  const { data } = useScreen((ctx) => (ready ? getGoalsDay(day, ctx, goals) : Promise.resolve(null)), ["goals", day, goals, ready]);
-  return { goals, ready, data: data && data.day === day ? data : undefined };
+  const { data, error, reload } = useScreen((ctx) => (ready ? getGoalsDay(day, ctx, goals) : Promise.resolve(null)), ["goals", day, goals, ready]);
+  return { goals, ready, data: data && data.day === day ? data : undefined, error, reload };
 }
 
 /** Strain's goals card. `day` is the day on show. */
 export function GoalsCard({ day, isToday }: { day: string; isToday: boolean }) {
-  const { goals, ready, data } = useGoalsDay(day);
+  const { goals, ready, data, error, reload } = useGoalsDay(day);
   const keys = GOAL_KEYS.filter((k) => goals.enabled[k]);
   const { t } = useTranslation("goals");
   const title = isToday ? t("card.titleToday") : t("card.title");
@@ -58,7 +59,7 @@ export function GoalsCard({ day, isToday }: { day: string; isToday: boolean }) {
   return (
     <SectionShell variant="card" title={title} href={`/goals?d=${day}`} aside={data && <Text className={ASIDE}>{t("card.done", { done: data.done, total: data.goals.length })}</Text>}>
       <Divided>
-        {data ? data.goals.map((g) => <GoalRowCompact key={g.key} g={g} />) : keys.map((k) => <RowSkeleton key={k} k={k} />)}
+        {data ? data.goals.map((g) => <GoalRowCompact key={g.key} g={g} />) : error ? <QueryError compact error={error} reload={reload} /> : keys.map((k) => <RowSkeleton key={k} k={k} />)}
         {data?.week && <WeekStrip week={data.week} dayTarget={goals.targets.azm} />}
       </Divided>
     </SectionShell>

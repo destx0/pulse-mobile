@@ -63,10 +63,11 @@ const throttled = (s: LeetCodeState, now: number) => {
 /**
  * Called once from boot after the Store opens. Reads the saved username and its snapshot, then refreshes in the
  * background when the snapshot is old (or there is none). Never throws: a failure is a state, not a broken launch.
+ * `again` re-reads from a different Store (the sample database, or the person's after leaving it).
  */
-export async function initLeetCode(st: Store): Promise<void> {
+export async function initLeetCode(st: Store, again = false): Promise<void> {
   store = st;
-  if (booted) return;
+  if (booted && !again) return;
   booted = true;
   try {
     const username = await readUsername();

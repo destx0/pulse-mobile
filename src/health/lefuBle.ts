@@ -140,6 +140,8 @@ function describe(e: unknown, device: string): string {
 export class LeFuScale {
   private manager: BleManager | null = null;
   private started = false;
+  /** The boot in flight: a screen that opens before the deferred start still gets a manager. */
+  private booting: Promise<void> | null = null;
   private loaded = false;
   private radio: BleRadio = "unknown";
   private permission: BlePermission = "unknown";
@@ -253,7 +255,7 @@ export class LeFuScale {
     this.started = true;
     this.wasForeground = this.foreground();
     AppState.addEventListener("change", (s) => this.onAppState(s));
-    void this.boot();
+    this.booting = this.boot();
   }
 
   private async boot() {
@@ -416,6 +418,9 @@ export class LeFuScale {
 
   /** Permission, then the radio: true when a scan or connection can start now. Prompts for whichever is missing. */
   private async prepare(): Promise<boolean> {
+    // The provider defers start() off the first frame; a person who opens the screen straight away still gets a manager.
+    if (!this.started) this.start();
+    if (this.booting) await this.booting;
     if (!this.manager) {
       this.emit();
       return false;

@@ -21,6 +21,7 @@ import { Text } from "@/ui/Text";
 import { useTheme } from "@/ui/theme";
 import { Hero, LINE, SOURCE_NOTE, StatRow } from "../strain/TrainingCards";
 import { useScreen } from "../useScreen";
+import { QueryError } from "@/ui/shells/QueryError";
 
 function P({ children }: { children: ReactNode }) {
   return <Text className="text-[15px] leading-[22px] text-foreground-body">{children}</Text>;
@@ -80,10 +81,10 @@ const skeleton = <Skeleton className="h-48 w-full rounded-lg" />;
 /** HRV Status for day `d` (none: today). */
 export function HrvStatusCard({ d }: { d?: string }) {
   const { t } = useTranslation("health");
-  const m = useScreen((ctx) => getHrvStatus(d ?? todayOf(ctx), ctx), ["hrv-status", d ?? null]).data;
+  const { data: m, error, reload } = useScreen((ctx) => getHrvStatus(d ?? todayOf(ctx), ctx), ["hrv-status", d ?? null]);
   return (
     <SectionShell variant="card" title={t("title.hrvStatus")} info={HRV_STATUS_INFO}>
-      <MetricState
+      {error && !m ? <QueryError compact error={error} reload={reload} /> : <MetricState
         metric={m}
         skeleton={skeleton}
         renderReason={(r, meta) => <ReasonPlaceholder reason={r} nightsLeft={meta.nightsLeft} size="md" copy={r === "calibrating" ? t("hrv.calibrating") : undefined} />}
@@ -112,7 +113,7 @@ export function HrvStatusCard({ d }: { d?: string }) {
             <Nights vm={v} />
           </View>
         )}
-      </MetricState>
+      </MetricState>}
     </SectionShell>
   );
 }
