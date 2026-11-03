@@ -20,7 +20,7 @@ import { Press } from "@/ui/Press";
 import { MenuPanel, useMenu } from "@/ui/Menu";
 import type { Box } from "@/ui/menuPlace";
 import { DURATION } from "@/ui/motion";
-import { BAR_CORNERS } from "@/ui/radius";
+export { ProgressBar } from "@/ui/ProgressBar";
 
 /** Body copy under a heading (web: max-w-[65ch] text-[15px] leading-[22px] text-foreground-secondary). */
 export const BODY = "text-[15px] leading-[22px] text-foreground-secondary";
@@ -265,15 +265,6 @@ export function Switch({ value, onValueChange, disabled, label }: { value: boole
         <Animated.View style={[{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#ffffff", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.25)" }, thumb]} />
       </Animated.View>
     </Pressable>
-  );
-}
-
-/** The web's Progress (h-1.5 on bg-muted, the fill bg-primary). */
-export function ProgressBar({ value, label }: { value: number; label: string }) {
-  return (
-    <View accessibilityRole="progressbar" accessibilityLabel={label} accessibilityValue={{ min: 0, max: 100, now: Math.round(value) }} className={cn("h-1.5 w-full overflow-hidden bg-muted", BAR_CORNERS)}>
-      <View className="h-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
-    </View>
   );
 }
 

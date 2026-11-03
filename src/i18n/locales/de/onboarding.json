@@ -92,5 +92,13 @@
     "body": "Synchronisiere, während Pulse geschlossen ist. Viele Handys brauchen außerdem die Erlaubnis, dass Pulse im Hintergrund laufen darf; die Schaltfläche öffnet diese Einstellung.",
     "openBattery": "Akkueinstellungen öffnen",
     "turnOn": "Hintergrund-Synchronisierung einschalten"
+  },
+  "extras": {
+    "title": "Zwei weitere Quellen",
+    "body": "Optional. Verbinde dein öffentliches LeetCode-Profil und übernimm deinen Trainingsverlauf aus Strong. Beides geht später auch in den Einstellungen.",
+    "continue": "Weiter",
+    "optional": "Beides ist optional",
+    "strongImporting": "Strong-Verlauf wird importiert",
+    "strongDone": "{{count}} Workouts importiert"
   }
 }

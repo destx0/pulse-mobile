@@ -1066,3 +1066,16 @@ pipeline, and the app skips `dataChanged` when nothing was scored. Sync now, a p
 `expo-sqlite` shim (exec, get, all, run, prepare). It checks day order, JSON round-trips, journal replacement, logged
 entry ranges and order, `needsScoring`, and that `clearAll` keeps the coach's chats. It does not replace the
 MemoryStore tests; it catches the SQL a MemoryStore test cannot.
+
+## Two optional sources before Health Connect
+
+On a first run the profile is followed by an extras step: a public LeetCode profile (`connectLeetCode`, validated by
+fetching it, so a typo is never saved) and a Strong CSV export (the same `previewStrong`/`importStrong` pair the gym
+screen uses). Both are optional and write to the same Store; Continue goes on to Health Connect. The LeetCode state is
+loaded at boot on an idle callback, so the step calls `initLeetCode(appStore())` itself before connecting: `booted`
+makes that call cheap and it still sets the module's Store.
+
+The Strong import reports `{ done, total }` after every session (`importStrong`'s optional `onProgress`) and yields every
+ten, so the onboarding bar and the gym import screen move instead of showing a spinner. The batch leaves the existing
+`putGymSets` transaction and duplicate check untouched. `ProgressBar` moved to `src/ui/ProgressBar.tsx` so onboarding,
+Settings and the gym import share it; Settings › Data source re-exports it.

@@ -92,5 +92,13 @@
     "body": "Sync while Pulse is closed. Many phones also need Pulse allowed to run in the background; the button opens that setting.",
     "openBattery": "Open battery settings",
     "turnOn": "Turn on background sync"
+  },
+  "extras": {
+    "title": "Two more sources",
+    "body": "Optional. Connect your public LeetCode profile and bring your Strong workout history. You can do both later in Settings.",
+    "continue": "Continue",
+    "optional": "Both are optional",
+    "strongImporting": "Importing your Strong history",
+    "strongDone": "{{count}} workouts imported"
   }
 }

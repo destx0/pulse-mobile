@@ -429,7 +429,11 @@ export async function previewStrong(c: ActionCtx, text: string): Promise<GymResu
  * After the sessions, one routine is made per workout name the file used (Push, Pull, Leg + arms...), from the most
  * recent session of that name: the templates page is then the owner's own week rather than an empty grid.
  */
-export async function importStrong(c: ActionCtx, text: string): Promise<GymResult<ImportOutcome>> {
+export async function importStrong(
+  c: ActionCtx,
+  text: string,
+  onProgress?: (p: { done: number; total: number }) => void,
+): Promise<GymResult<ImportOutcome>> {
   const preview = await previewStrong(c, text);
   if (!preview.ok) return { ok: false, error: preview.error };
   const { result } = preview.data;
@@ -476,9 +480,12 @@ export async function importStrong(c: ActionCtx, text: string): Promise<GymResul
   let duplicates = 0;
   const writtenIds: string[] = [];
   const byName = new Map<string, { session: GymSession; sets: GymSet[] }>();
-  for (const parsed of sessions) {
+  const total = sessions.length;
+  onProgress?.({ done: 0, total });
+  for (const [i, parsed] of sessions.entries()) {
     if (existing.has(parsed.startTs)) {
       duplicates++;
+      onProgress?.({ done: i + 1, total });
       continue;
     }
     const session: GymSession = {
@@ -524,8 +531,11 @@ export async function importStrong(c: ActionCtx, text: string): Promise<GymResul
     writtenIds.push(session.id);
     written++;
     writtenSets += sets.length;
-    if (written % 25 === 0) await slice();
+    onProgress?.({ done: i + 1, total });
+    // Ten sessions at a time, so the bar moves while the writes run.
+    if (i % 10 === 0) await slice();
   }
+  onProgress?.({ done: total, total });
   if (!written) return fail("nothingToImport");
 
   // One template per workout name, from the last time it was done.

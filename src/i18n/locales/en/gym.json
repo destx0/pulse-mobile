@@ -208,6 +208,7 @@
     "none": "No plates"
   },
   "import": {
+    "importing": "Importing…",
     "title": "Import from Strong",
     "body": "Export your history in Strong (Settings › Export Data), then pick the CSV here. Names the app does not know become your own exercises, and days already in the log are left alone.",
     "pick": "Choose the CSV",

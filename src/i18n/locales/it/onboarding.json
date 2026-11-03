@@ -92,5 +92,13 @@
     "body": "Sincronizza mentre Pulse è chiuso. Molti telefoni richiedono anche di consentire a Pulse di funzionare in background; il pulsante apre quell’impostazione.",
     "openBattery": "Apri le impostazioni batteria",
     "turnOn": "Attiva la sincronizzazione in background"
+  },
+  "extras": {
+    "title": "Due altre fonti",
+    "body": "Facoltativo. Collega il tuo profilo pubblico LeetCode e importa la cronologia di Strong. Puoi farlo anche dopo in Impostazioni.",
+    "continue": "Continua",
+    "optional": "Entrambe sono facoltative",
+    "strongImporting": "Importazione della cronologia Strong",
+    "strongDone": "{{count}} allenamenti importati"
   }
 }

@@ -92,5 +92,13 @@
     "body": "Synchronise quand Pulse est fermé. Beaucoup de téléphones demandent aussi d’autoriser Pulse à s’exécuter en arrière-plan ; le bouton ouvre ce réglage.",
     "openBattery": "Ouvrir les réglages de batterie",
     "turnOn": "Activer la synchronisation en arrière-plan"
+  },
+  "extras": {
+    "title": "Deux sources de plus",
+    "body": "Facultatif. Connecte ton profil public LeetCode et importe ton historique Strong. Tu peux le faire plus tard dans Réglages.",
+    "continue": "Continuer",
+    "optional": "Les deux sont facultatifs",
+    "strongImporting": "Importation de ton historique Strong",
+    "strongDone": "{{count}} séances importées"
   }
 }

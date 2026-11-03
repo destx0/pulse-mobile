@@ -1,8 +1,8 @@
 # Onboarding
 
-First run should show Pulse working before it asks for much. A welcome screen with two ways in, the profile, a plain
-explainer before Health Connect's permission sheet, then the first import with its progress. The tabs open when the
-first run has scored the history.
+First run should show Pulse working before it asks for much. A welcome screen with two ways in, the profile, two
+optional sources (a public LeetCode profile and a Strong CSV export), a plain explainer before Health Connect's
+permission sheet, then the first import with its progress. The tabs open when the first run has scored the history.
 
 ## The flow
 
@@ -18,9 +18,10 @@ flowchart TD
   SH -->|granted, own profile saved before| I
   SH -->|granted, no profile yet| P
   W -->|Connect| P["Profile: birth date, sex, time zone"]
-  P -->|no source yet| X["Explainer: What Pulse reads"]
+  P -->|no source yet| X2["Two more sources: LeetCode · Strong<br/>both optional, Continue"]
+  X2 --> X["Explainer: What Pulse reads"]
   P -->|source chosen| I
-  X -->|Not now| P
+  X -->|Not now| W
   X --> SH2["Health Connect's permission sheet"]
   SH2 -->|nothing granted| R
   SH2 -->|granted| I["Importing your data: step and progress<br/>Keep Pulse up to date: background sync and battery"]
@@ -33,15 +34,15 @@ flowchart TD
 
 | Piece | Where | Notes |
 |---|---|---|
-| Steps and start | `src/screens/onboarding/OnboardingScreen.tsx` | Welcome, profile, connect, importing. The step comes from the app state: a saved profile without a source opens on the connect step, an import in flight on its progress, a source without a profile (the sample left before a profile was saved) on the profile step. |
+| Steps and start | `src/screens/onboarding/OnboardingScreen.tsx` | Welcome, profile, extras, connect, importing. The step comes from the app state: a saved profile without a source opens on the connect step, an import in flight on its progress, a source without a profile (the sample left before a profile was saved) on the profile step. The extras step follows a first profile: a LeetCode username validated against the public profile (`connectLeetCode`), and a Strong CSV previewed then imported. Continue skips both. |
 | Gate | `app/_layout.tsx`, `src/state/app.ts` | `onboarded` is a profile, a source and a first completed run. `Stack.Protected` shows onboarding until then and the tabs after. |
 | Frame | `src/screens/onboarding/Frame.tsx` | pulse's AuthShell: wordmark, one 400 px column, footer pinned to the bottom. |
 | Explainer and waiting screen | `src/screens/onboarding/Connect.tsx` `ConnectFlow` | One line per group of `READ_TYPES` (`src/health/connect.ts`). While `connectHealth()` waits for the sheet, "Waiting for Health Connect" sits behind it. Nothing granted shows "Allow Health Connect". Health Connect unavailable or needing an update says so; Android back is "Not now". |
 | Permissions | `src/health/connect.ts` `askPermissions` (halo) | Every read type, older data (`READ_HEALTH_DATA_HISTORY`) and background reads, in one sheet. |
-| Sample data | `exploreSample` in `src/state/app.ts`, `seedDemo` in `src/data/seed.ts` (halo) | 180 days of a demo person with their own profile, scored by the pipeline. A profile saved before is kept in AsyncStorage for when the person connects. |
+| Sample data | `exploreSample` in `src/state/app.ts`, `seedDemo` in `src/data/seed.ts` (halo) | 180 days of a demo person with their own profile, scored by the pipeline, in `pulse-demo.db` (`DEMO_DB`). The person's own database, profile and journal are untouched; leaving the sample opens it again. |
 | Sample data card | `src/ui/shells/SampleCard.tsx`, in `PageShell` | Top of every tab root while the source is the sample. "Connect your data" opens `/connect`. |
-| Leaving sample data | `app/connect.tsx`, `connectHealth` in `src/state/app.ts` | Health Connect's permissions first, so a refused sheet keeps the sample. Then the demo rows go, the person's own profile comes back (or the profile step follows), and the import starts. |
-| First import | `src/screens/onboarding/OnboardingScreen.tsx` `Importing` | The run's step ("Reading heart rate", "Scoring your days") and a progress bar, from the app state's `progress`. |
+| Leaving sample data | `app/connect.tsx`, `connectHealth` in `src/state/app.ts` | Health Connect's permissions first, so a refused sheet keeps the sample. Then the person's own database opens again (or the profile step follows), and the import starts. |
+| First import | `src/screens/onboarding/OnboardingScreen.tsx` `Importing` | The run's step ("Reading heart rate", "Scoring your days") and a progress bar, from the app state's `progress`. The Strong import on the extras step reports the sessions it writes (`importStrong`'s `onProgress`), so that bar moves too. |
 | Background sync offer | `src/screens/onboarding/OnboardingScreen.tsx` `BackgroundOffer` | Under the first import's progress: "Turn on background sync" turns it on and, when Android's battery optimisation still applies to Pulse (`expo-battery`), opens Pulse's App info, where the phone's "Allow background activity" or "Unrestricted" choice is. Phone makers' app freezers otherwise pause each background run a few seconds in (docs/learning.md, "Background sync that finishes"). Back in Pulse it reads "Background sync is on". |
 | Pulse Age checklist | `src/screens/health/FirstAge.tsx` | Replaces Pace of Aging until the first Pulse Age: recorded days out of 20, the Sleep, Strain and Fitness measures that are ready, and height (opens the profile sheet). |
 | Log yesterday | `app/(tabs)/journal.tsx` | The first time the Journal opens on today with yesterday not checked in, the check-in sheet opens on yesterday. Once only (AsyncStorage `pulse.journal.yesterdayOffered`). |
@@ -62,8 +63,8 @@ stateDiagram-v2
   Waiting --> Allow: nothing granted
   Waiting --> Importing: granted (the first run starts)
   Allow --> Waiting: Connect Health Connect
-  Allow --> Profile: Not now
-  Explainer --> Profile: Not now
+  Allow --> Welcome: Not now
+  Explainer --> Welcome: Not now
   Importing --> Tabs: first run done
   Importing --> Stopped: run failed
   Stopped --> Importing: Try again

@@ -92,5 +92,13 @@
     "body": "Sincroniza con Pulse cerrado. Muchos teléfonos también necesitan que Pulse tenga permiso para ejecutarse en segundo plano; el botón abre ese ajuste.",
     "openBattery": "Abrir ajustes de batería",
     "turnOn": "Activar sincronización en segundo plano"
+  },
+  "extras": {
+    "title": "Dos fuentes más",
+    "body": "Opcional. Conecta tu perfil público de LeetCode y trae tu historial de Strong. Puedes hacerlo más tarde en Ajustes.",
+    "continue": "Continuar",
+    "optional": "Ambos son opcionales",
+    "strongImporting": "Importando tu historial de Strong",
+    "strongDone": "{{count}} entrenamientos importados"
   }
 }

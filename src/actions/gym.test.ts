@@ -200,6 +200,15 @@ describe("a session", () => {
 });
 
 describe("the import", () => {
+  it("reports the sessions as it writes them, for the progress bar", async () => {
+    const seen: { done: number; total: number }[] = [];
+    const res = await importStrong(act(), STRONG, (p) => seen.push(p));
+    expect(res.ok).toBe(true);
+    expect(seen[0]).toEqual({ done: 0, total: 2 });
+    expect(seen.at(-1)).toEqual({ done: 2, total: 2 });
+    expect(seen.some((p) => p.done === 1)).toBe(true);
+  });
+
   it("writes the sessions, keeps the note, and leaves an unknown name as the owner's own exercise", async () => {
     const res = await importStrong(act(), STRONG);
     if (!res.ok) throw new Error(res.error);

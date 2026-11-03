@@ -7,24 +7,28 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { AppState, Linking, View } from "react-native";
 import { isBatteryOptimizationEnabledAsync } from "expo-battery";
-import { Lock } from "lucide-react-native";
+import { File } from "expo-file-system";
+import { Code2, Dumbbell, FileUp, Lock } from "lucide-react-native";
 import { writeSettings } from "@/background/settings";
 import { syncRegistration } from "@/background/task";
+import { importStrong, previewStrong, type ImportPreview } from "@/actions/gym";
+import { leetcodeErrorCopy } from "@/leetcode/copy";
+import { actionCtx, appStore, dataChanged, exploreSample, refresh, stepLabel, useApp, type Progress } from "@/state/app";
+import { connectLeetCode, initLeetCode, useLeetCode } from "@/state/leetcode";
 import { Button } from "@/ui/Button";
 import { Card } from "@/ui/Card";
-import { exploreSample, refresh, stepLabel, useApp, type Progress } from "@/state/app";
 import { haptic } from "@/ui/haptics";
 import { Icon } from "@/ui/Icon";
+import { ProgressBar } from "@/ui/ProgressBar";
 import { Text } from "@/ui/Text";
 import { ConnectFlow } from "./Connect";
 import { Frame } from "./Frame";
 import { ConnectButton, TextButton } from "./buttons";
 import { HeartbeatMark } from "./HeartbeatMark";
 import { ProfileForm, SaveButton } from "./ProfileForm";
-import { cn } from "@/ui/cn";
-import { BAR_CORNERS } from "@/ui/radius";
+import { Field, TextField } from "../settings/controls";
 
-type Step = "welcome" | "profile" | "connect";
+type Step = "welcome" | "profile" | "extras" | "connect";
 
 export function OnboardingScreen() {
   const hasProfile = useApp((s) => s.profile !== null);
@@ -33,11 +37,13 @@ export function OnboardingScreen() {
   // A profile and no source: carry on at the connect step. A source and no profile (the sample was left before a
   // profile was ever saved): the profile step, and the import starts once it is saved.
   const [step, setStep] = useState<Step>(() => (hasProfile ? "connect" : source === "health_connect" ? "profile" : "welcome"));
+  // A first profile is followed by the optional LeetCode and Strong steps; a returning profile goes straight to connect.
   // The first import (or the sample's build) runs: its progress, or its failure with a way to try again.
   if (hasProfile && source && (status === "syncing" || status === "error")) return <Importing sample={source === "demo"} />;
-  if (step === "welcome") return <Welcome onConnect={() => setStep("profile")} />;
-  if (step === "profile") return <Profile onSaved={() => setStep("connect")} />;
-  return <ConnectFlow onCancel={() => setStep(hasProfile ? "profile" : "welcome")} />;
+  if (step === "welcome") return <Welcome onConnect={() => setStep(hasProfile ? "extras" : "profile")} />;
+  if (step === "profile") return <Profile onSaved={() => setStep("extras")} />;
+  if (step === "extras") return <Extras onDone={() => setStep("connect")} />;
+  return <ConnectFlow onCancel={() => setStep("welcome")} />;
 }
 
 /** One bar for the run: the step's share done. */
@@ -47,9 +53,7 @@ function ProgressFooter({ progress, fallback }: { progress: Progress | null; fal
   const pct = Math.round(fraction(progress) * 100);
   return (
     <View accessibilityLiveRegion="polite" className="h-[132px] items-center justify-center gap-3 px-6">
-      <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }} className={cn("h-2 w-full overflow-hidden bg-fill-pressed", BAR_CORNERS)}>
-        <View className="h-full bg-primary" style={{ width: `${pct}%` }} />
-      </View>
+      <ProgressBar value={pct} label={progress ? stepLabel(progress.step) : fallback} className="h-2 bg-fill-pressed" />
       <Text className="text-[13px] leading-[18px] text-foreground-secondary">{progress ? stepLabel(progress.step) : fallback}…</Text>
     </View>
   );
@@ -133,6 +137,207 @@ function Profile({ onSaved }: { onSaved: () => void }) {
           </View>
         )}
       />
+    </Frame>
+  );
+}
+
+/**
+ * Two optional sources between the profile and Health Connect: a public LeetCode profile and a Strong CSV export. Both
+ * write to the same Store the rest of onboarding uses; neither blocks Continue. The Strong import reports its sessions
+ * as it writes them, so the bar moves rather than a spinner.
+ */
+function Extras({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation(["onboarding", "leetcode", "gym"]);
+  const lc = useLeetCode();
+  const [draft, setDraft] = useState<string | null>(null);
+  const [lcBusy, setLcBusy] = useState(false);
+  const [lcError, setLcError] = useState<string | null>(null);
+  const [strongText, setStrongText] = useState<string | null>(null);
+  const [strongPreview, setStrongPreview] = useState<ImportPreview | null>(null);
+  const [strongDone, setStrongDone] = useState<number | null>(null);
+  const [strongBusy, setStrongBusy] = useState(false);
+  const [strongProgress, setStrongProgress] = useState<{ done: number; total: number } | null>(null);
+  const [strongError, setStrongError] = useState<string | null>(null);
+  const name = draft ?? lc.username ?? "";
+
+  // The LeetCode state is loaded at boot on an idle callback; opening this step earlier still needs its Store.
+  useEffect(() => {
+    void initLeetCode(appStore());
+  }, []);
+
+  const connect = async () => {
+    if (lcBusy) return;
+    const username = name.trim();
+    if (!username) return setLcError(t("leetcode:error.invalidUsername"));
+    setLcBusy(true);
+    setLcError(null);
+    try {
+      // A first run may reach this before the idle boot load set the module's Store.
+      await initLeetCode(appStore());
+      const result = await connectLeetCode(username);
+      if (result.ok) {
+        setDraft(result.snapshot.username);
+        haptic.success();
+      } else {
+        setLcError(leetcodeErrorCopy(result.error));
+      }
+    } catch {
+      setLcError(leetcodeErrorCopy("offline"));
+    } finally {
+      setLcBusy(false);
+    }
+  };
+
+  const strongMessage = (code: string) =>
+    code === "emptyFile" ? t("gym:import.errorEmpty") : code === "notStrong" ? t("gym:import.errorFormat") : t("gym:import.errorNothing");
+
+  const pickStrong = async () => {
+    if (strongBusy) return;
+    setStrongError(null);
+    setStrongBusy(true);
+    try {
+      const picked = await File.pickFileAsync({ mimeTypes: ["text/csv", "text/plain", "application/vnd.ms-excel", "text/comma-separated-values", "*/*"] });
+      if (picked.canceled) return;
+      const content = await picked.result.text();
+      const res = await previewStrong(actionCtx(), content);
+      if (!res.ok) {
+        setStrongError(strongMessage(res.error));
+        return;
+      }
+      setStrongText(content);
+      setStrongPreview(res.data);
+      setStrongDone(null);
+    } catch {
+      setStrongError(t("gym:import.error"));
+    } finally {
+      setStrongBusy(false);
+    }
+  };
+
+  const runStrong = async () => {
+    if (!strongText || strongBusy) return;
+    setStrongBusy(true);
+    setStrongError(null);
+    try {
+      const res = await importStrong(actionCtx(), strongText, setStrongProgress);
+      if (!res.ok) {
+        setStrongError(res.error === "nothingToImport" && strongPreview ? t("gym:import.nothing") : strongMessage(res.error));
+        return;
+      }
+      setStrongDone(res.data.sessions);
+      setStrongPreview(null);
+      setStrongText(null);
+      dataChanged("gym");
+      haptic.success();
+    } catch {
+      setStrongError(t("gym:import.error"));
+    } finally {
+      setStrongBusy(false);
+      setStrongProgress(null);
+    }
+  };
+
+  const summary = strongPreview?.result.summary;
+  const allImported = !!strongPreview && strongPreview.result.sessions.length > 0 && strongPreview.duplicates >= strongPreview.result.sessions.length;
+
+  return (
+    <Frame
+      footer={
+        <>
+          <Button onPress={onDone} disabled={strongBusy}>
+            {t("extras.continue")}
+          </Button>
+          <Text className="mt-2 text-center text-[13px] leading-[18px] text-muted-foreground">{t("extras.optional")}</Text>
+        </>
+      }
+    >
+      <Text accessibilityRole="header" className="text-[28px] font-bold leading-[34px] tracking-[-0.02em]">
+        {t("extras.title")}
+      </Text>
+      <Text className="mb-6 mt-2 text-[15px] leading-[22px] text-foreground-secondary">{t("extras.body")}</Text>
+
+      <Card className="gap-3 p-4">
+        <View className="flex-row items-center gap-3">
+          <Icon icon={Code2} size={22} tone="foreground" strokeWidth={1.75} />
+          <Text className="min-w-0 flex-1 text-[17px] font-semibold leading-[22px]">{t("leetcode:settings.title")}</Text>
+        </View>
+        <Text className="text-[13px] leading-[19px] text-foreground-secondary">{t("leetcode:settings.description")}</Text>
+        {!!lc.username && <Text className="text-[13px] font-medium leading-[19px] text-optimal">{t("leetcode:settings.connectedAs", { username: lc.username })}</Text>}
+        <Field label={t("leetcode:settings.username")} hint={t("leetcode:settings.usernameHint")} error={lcError ?? undefined}>
+          <TextField
+            value={name}
+            onChangeText={(v) => {
+              setDraft(v);
+              setLcError(null);
+            }}
+            placeholder={t("leetcode:settings.usernamePlaceholder")}
+            accessibilityLabel={t("leetcode:settings.username")}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+            maxLength={30}
+            returnKeyType="done"
+            onSubmitEditing={() => void connect()}
+          />
+        </Field>
+        <Button variant={lc.username ? "secondary" : "default"} disabled={lcBusy} onPress={() => void connect()}>
+          {lcBusy ? t("leetcode:settings.connecting") : lc.username ? t("leetcode:settings.save") : t("leetcode:settings.connect")}
+        </Button>
+      </Card>
+
+      <Card className="mt-4 gap-3 p-4">
+        <View className="flex-row items-center gap-3">
+          <Icon icon={Dumbbell} size={22} tone="foreground" strokeWidth={1.75} />
+          <Text className="min-w-0 flex-1 text-[17px] font-semibold leading-[22px]">{t("gym:import.title")}</Text>
+        </View>
+        <Text className="text-[13px] leading-[19px] text-foreground-secondary">{t("gym:import.body")}</Text>
+
+        {!!strongError && (
+          <Text accessibilityRole="alert" className="text-[13px] font-medium leading-[18px] text-recovery-red-text">
+            {strongError}
+          </Text>
+        )}
+
+        {!!strongDone && <Text className="text-[13px] font-medium leading-[18px] text-optimal">{t("extras.strongDone", { count: strongDone })}</Text>}
+
+        {!!strongProgress && (
+          <View className="gap-2">
+            <ProgressBar value={strongProgress.total > 0 ? (strongProgress.done / strongProgress.total) * 100 : 0} label={t("extras.strongImporting")} />
+            <Text className="text-[12px] tabular-nums text-muted-foreground">
+              {t("extras.strongImporting")} {strongProgress.done} / {strongProgress.total}
+            </Text>
+          </View>
+        )}
+
+        {!!summary && !strongDone && (
+          <Text className="text-[13px] leading-[19px] text-muted-foreground">
+            {t("gym:import.sessions", { count: summary.sessions })} · {t("gym:import.sets", { count: summary.sets })}
+            {strongPreview && strongPreview.duplicates > 0 ? ` · ${t("gym:import.duplicates", { count: strongPreview.duplicates })}` : ""}
+          </Text>
+        )}
+        {!!strongPreview && !!strongPreview.custom.length && <Text className="text-[13px] leading-[19px] text-muted-foreground">{t("gym:import.custom", { count: strongPreview.custom.length })}</Text>}
+
+        {strongDone ? (
+          <Button variant="secondary" disabled={strongBusy} onPress={() => void pickStrong()}>
+            {t("gym:import.again")}
+          </Button>
+        ) : allImported ? (
+          <Button variant="secondary" disabled={strongBusy} onPress={() => void pickStrong()}>
+            {t("gym:import.allImported")}
+          </Button>
+        ) : strongPreview ? (
+          <Button disabled={strongBusy} onPress={() => void runStrong()}>
+            {t("gym:import.run")}
+          </Button>
+        ) : (
+          <Button variant="secondary" disabled={strongBusy} onPress={() => void pickStrong()}>
+            <View className="flex-row items-center gap-2">
+              <Icon icon={FileUp} size={16} tone="foreground" />
+              <Text className="text-[13px] font-bold uppercase tracking-[0.1em] text-foreground">{strongBusy ? t("gym:import.reading") : t("gym:import.pick")}</Text>
+            </View>
+          </Button>
+        )}
+      </Card>
     </Frame>
   );
 }

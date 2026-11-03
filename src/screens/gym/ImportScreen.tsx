@@ -16,6 +16,7 @@ import { Icon } from "@/ui/Icon";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
+import { ProgressBar } from "@/ui/ProgressBar";
 import { DAY, formatDay } from "@/lib/format";
 import { toast } from "@/ui/Toast";
 import { ConfirmDialog, StatTile } from "./parts";
@@ -27,6 +28,7 @@ export function ImportScreen() {
   const [text, setText] = useState<string | null>(null);
   const [done, setDone] = useState<ImportOutcome | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [confirmUndo, setConfirmUndo] = useState<GymImportState | null>(null);
 
@@ -54,8 +56,9 @@ export function ImportScreen() {
   const run = async () => {
     if (!text) return;
     setBusy(true);
+    setProgress({ done: 0, total: preview?.result.sessions.length ?? 0 });
     try {
-      const res = await importStrong(actionCtx(), text);
+      const res = await importStrong(actionCtx(), text, setProgress);
       if (!res.ok) {
         toast.error(t("import.nothing"));
         return;
@@ -66,6 +69,7 @@ export function ImportScreen() {
       toast.success(t("import.done", { count: res.data.sessions }));
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -116,6 +120,15 @@ export function ImportScreen() {
               {duplicates > 0 && <Text className="text-[12px] text-muted-foreground">{t("import.duplicates", { count: duplicates })}</Text>}
               {s.cappedDuration > 0 && <Text className="text-[12px] text-warning-text">{t("import.capped", { count: s.cappedDuration })}</Text>}
             </Card>
+          )}
+
+          {!!progress && (
+            <View className="gap-2">
+              <ProgressBar value={progress.total > 0 ? (progress.done / progress.total) * 100 : 0} label={t("import.importing")} />
+              <Text className="text-[12px] tabular-nums text-muted-foreground">
+                {t("import.importing")} {progress.done} / {progress.total}
+              </Text>
+            </View>
           )}
 
           {done ? (

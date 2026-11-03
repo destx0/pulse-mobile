@@ -92,5 +92,13 @@
     "body": "Synchronizuj, gdy Pulse jest zamknięty. Wiele telefonów wymaga też zezwolenia Pulse na działanie w tle; przycisk otwiera to ustawienie.",
     "openBattery": "Otwórz ustawienia baterii",
     "turnOn": "Włącz synchronizację w tle"
+  },
+  "extras": {
+    "title": "Dwa dodatkowe źródła",
+    "body": "Opcjonalnie. Połącz publiczny profil LeetCode i zaimportuj historię z Strong. Możesz to zrobić później w Ustawieniach.",
+    "continue": "Dalej",
+    "optional": "Oba są opcjonalne",
+    "strongImporting": "Importowanie historii Strong",
+    "strongDone": "Zaimportowano treningi: {{count}}"
   }
 }
