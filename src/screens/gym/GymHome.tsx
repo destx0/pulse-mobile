@@ -1,4 +1,4 @@
-// The gym tab `/gym`: Strong's Workout page. The owner's templates in a two-column grid, the workout in progress above
+// The gym tab `/gym`: Strong's Workout page. The owner's templates in one wide column, the workout in progress above
 // them, then the last sessions and the week's totals. Tapping a template starts it; "Start empty" starts a blank one.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { ChevronRight, Dumbbell, Play, Plus, Search, Trophy } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { deleteRoutine as removeRoutine, startSession } from "@/actions/gym";
+import { loadText, toUnit, trimLoad } from "@/core/gym/load";
 import { getGymHome } from "@/queries/gym";
 import { useScreen } from "@/screens/useScreen";
 import { Button } from "@/ui/Button";
@@ -16,6 +17,7 @@ import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { PageShell } from "@/ui/shells/PageShell";
 import { push } from "@/ui/navigate";
+import { toast } from "@/ui/Toast";
 import { Block, ConfirmDialog, GymEmpty, SessionRow, StatTile, TemplateCard, clockText, lengthText, useNow, volumeText } from "./parts";
 import { GymSkeleton } from "./GymSkeleton";
 
@@ -24,11 +26,19 @@ export function GymHome() {
   const { data } = useScreen(getGymHome, ["gym-home"]);
   const [pending, setPending] = useState(false);
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
-  const now = useNow();
+  // The clock only matters while a workout runs: a tab left mounted behind More must not tick every second.
+  const active = data?.active;
+  const now = useNow(!!active);
   const cardStyle = useCardStyle();
 
   const start = async (routineId?: string) => {
     if (pending) return;
+    if (data?.active) {
+      // One workout at a time: a tap on a template while one runs says so and opens the one already going.
+      toast.info(t("home.alreadyActive"));
+      push(`/gym/session/${data.active.session.id}`);
+      return;
+    }
     setPending(true);
     try {
       const res = await startSession(actionCtx(), routineId ? { routineId } : {});
@@ -40,7 +50,6 @@ export function GymHome() {
     }
   };
 
-  const active = data?.active;
   const elapsed = active ? now - active.session.startTs : 0;
 
   return (
@@ -48,8 +57,9 @@ export function GymHome() {
       title={t("tab")}
       loading={!data}
       actions={
-        <Press accessibilityRole="button" accessibilityLabel={t("home.search")} onPress={() => push("/gym/exercises")} className="size-11 items-center justify-center rounded-full">
-          <Icon icon={Search} size={22} tone="foreground" />
+        <Press accessibilityRole="search" accessibilityLabel={t("home.search")} onPress={() => push("/gym/exercises")} className="h-11 w-full flex-row items-center gap-2 rounded-xl bg-secondary px-3">
+          <Icon icon={Search} size={18} tone="muted-foreground" />
+          <Text className="text-[15px] text-muted-foreground">{t("home.searchHint")}</Text>
         </Press>
       }
     >
@@ -69,7 +79,7 @@ export function GymHome() {
                   <Text className="text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
                     {active.session.name}
                   </Text>
-                  <Text className="text-[12px] leading-4 text-muted-foreground">
+                  <Text className="text-[12px] leading-4 tabular-nums text-muted-foreground">
                     {t("home.resumeSub", { done: active.done, total: active.setCount })} · {clockText(elapsed)}
                   </Text>
                 </View>
@@ -137,18 +147,20 @@ export function GymHome() {
             </Block>
           )}
 
-          <Block title={t("home.week")}>
-            <View className="gap-2">
-              <View className="flex-row gap-2">
-                <StatTile label={t("home.workouts")} value={String(data.week.sessions)} />
-                <StatTile label={t("home.sets")} value={String(data.week.sets)} />
+          {data.week.sessions > 0 && (
+            <Block title={t("home.week")}>
+              <View className="gap-2">
+                <View className="flex-row gap-2">
+                  <StatTile label={t("home.workouts")} value={String(data.week.sessions)} />
+                  <StatTile label={t("home.sets")} value={String(data.week.sets)} />
+                </View>
+                <View className="flex-row gap-2">
+                  <StatTile label={t("home.volume")} value={volumeText(data.week.volumeKg, data.week.unit)} />
+                  <StatTile label={t("home.time")} value={lengthText(data.week.seconds)} />
+                </View>
               </View>
-              <View className="flex-row gap-2">
-                <StatTile label={t("home.volume")} value={volumeText(data.week.volumeKg)} />
-                <StatTile label={t("home.time")} value={data.week.seconds ? lengthText(data.week.seconds) : "0 min"} />
-              </View>
-            </View>
-          </Block>
+            </Block>
+          )}
 
           {data.records.length > 0 && (
             <Block
@@ -176,10 +188,10 @@ export function GymHome() {
                         {r.exercise.name}
                       </Text>
                       <Text className="font-numeric text-[12px] leading-4 text-muted-foreground">
-                        {`${Math.round(r.record.weightKg)} kg × ${r.record.reps}`}
+                        {`${loadText(r.record.weightKg, r.exercise.unit)} ${r.exercise.unit} × ${r.record.reps}`}
                       </Text>
                     </View>
-                    <Text className="font-numeric text-[15px] font-semibold">{r.record.oneRm.toFixed(1)}</Text>
+                    <Text className="font-numeric text-[15px] font-semibold">{`${trimLoad(Math.round(toUnit(r.record.oneRm, r.exercise.unit) * 10) / 10)} ${r.exercise.unit}`}</Text>
                     <Icon icon={ChevronRight} size={14} tone="muted-foreground" />
                   </Press>
                 ))}

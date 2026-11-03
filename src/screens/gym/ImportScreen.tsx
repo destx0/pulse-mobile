@@ -4,19 +4,21 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 import { File } from "expo-file-system";
-import { FileUp, History } from "lucide-react-native";
+import { FileUp, History, Undo2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
-import { importStrong, previewStrong, type ImportOutcome, type ImportPreview } from "@/actions/gym";
+import { importStrong, previewStrong, undoStrongImport, type ImportOutcome, type ImportPreview } from "@/actions/gym";
+import type { GymImportState } from "@/data/gym";
 import { getGymImport } from "@/queries/gym";
 import { useScreen } from "@/screens/useScreen";
 import { Button } from "@/ui/Button";
 import { Card, CardFill } from "@/ui/Card";
 import { Icon } from "@/ui/Icon";
+import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
 import { DAY, formatDay } from "@/lib/format";
 import { toast } from "@/ui/Toast";
-import { StatTile } from "./parts";
+import { ConfirmDialog, StatTile } from "./parts";
 
 export function ImportScreen() {
   const { t } = useTranslation("gym");
@@ -25,6 +27,8 @@ export function ImportScreen() {
   const [text, setText] = useState<string | null>(null);
   const [done, setDone] = useState<ImportOutcome | null>(null);
   const [busy, setBusy] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState<GymImportState | null>(null);
 
   const choose = async () => {
     setBusy(true);
@@ -34,7 +38,7 @@ export function ImportScreen() {
       const content = await picked.result.text();
       const res = await previewStrong(actionCtx(), content);
       if (!res.ok) {
-        toast.error(t("import.error"));
+        toast.error(t(res.error === "emptyFile" ? "import.errorEmpty" : res.error === "notStrong" ? "import.errorFormat" : "import.errorNothing"));
         return;
       }
       setText(content);
@@ -68,6 +72,23 @@ export function ImportScreen() {
   const s = done ?? preview?.result.summary ?? null;
   const duplicates = done?.duplicates ?? preview?.duplicates ?? 0;
   const newExercises = done?.custom.length ?? preview?.custom.length ?? 0;
+  const lastUndoable = last?.sessionIds?.length ? last : null;
+
+  const runUndo = async () => {
+    if (!confirmUndo) return;
+    setUndoing(true);
+    try {
+      await undoStrongImport(actionCtx().store, confirmUndo);
+      dataChanged();
+      setDone(null);
+      setPreview(null);
+      setText(null);
+      setConfirmUndo(null);
+      toast.success(t("import.undone"));
+    } finally {
+      setUndoing(false);
+    }
+  };
 
   return (
     <DetailShell
@@ -84,12 +105,12 @@ export function ImportScreen() {
               <CardFill />
               <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{done ? t("import.done", { count: done.sessions }) : t("import.preview")}</Text>
               <View className="flex-row gap-2">
-                <StatTile label={t("import.sessions", { count: s.sessions })} value={String(s.sessions)} />
-                <StatTile label={t("import.sets", { count: s.sets })} value={String(s.sets)} />
+                <StatTile label={t("import.workoutsLabel")} value={String(s.sessions)} />
+                <StatTile label={t("import.setsLabel")} value={String(s.sets)} />
               </View>
               <View className="flex-row gap-2">
-                <StatTile label={t("import.notes", { count: s.notes })} value={String(s.notes)} />
-                <StatTile label={t("import.custom", { count: newExercises })} value={String(newExercises)} />
+                <StatTile label={t("import.notesLabel")} value={String(s.notes)} />
+                <StatTile label={t("import.customLabel")} value={String(newExercises)} />
               </View>
               {!!s.from && !!s.to && <Text className="text-[12px] text-muted-foreground">{t("import.range", { from: formatDay(s.from, DAY.monthDay), to: formatDay(s.to, DAY.monthDay) })}</Text>}
               {duplicates > 0 && <Text className="text-[12px] text-muted-foreground">{t("import.duplicates", { count: duplicates })}</Text>}
@@ -98,13 +119,30 @@ export function ImportScreen() {
           )}
 
           {done ? (
-            <Button onPress={() => void choose()} disabled={busy}>
-              {t("import.again")}
-            </Button>
+            <View className="gap-2">
+              <Button onPress={() => void choose()} disabled={busy}>
+                {t("import.again")}
+              </Button>
+              <Button variant="ghost" textClassName="text-recovery-red-text" disabled={busy || undoing} onPress={() => setConfirmUndo({ importedAt: 0, sessions: done.sessions, sets: done.sets, firstDay: done.from, lastDay: done.to, sessionIds: done.sessionIds, routineIds: done.routineIds })}>
+                <View className="flex-row items-center gap-2">
+                  <Icon icon={Undo2} size={16} tone="recovery-red-text" />
+                  <Text className="text-[13px] font-bold uppercase tracking-[0.1em] text-recovery-red-text">{t("import.undo")}</Text>
+                </View>
+              </Button>
+            </View>
           ) : preview ? (
-            <Button onPress={() => void run()} disabled={busy}>
-              {t("import.run")}
-            </Button>
+            preview.result.sessions.length > 0 && duplicates >= preview.result.sessions.length ? (
+              <View className="gap-2">
+                <Button disabled>{t("import.allImported")}</Button>
+                <Button variant="outline" onPress={() => void choose()} disabled={busy}>
+                  {t("import.again")}
+                </Button>
+              </View>
+            ) : (
+              <Button onPress={() => void run()} disabled={busy}>
+                {t("import.run")}
+              </Button>
+            )
           ) : (
             <Button onPress={() => void choose()} disabled={busy}>
               <View className="flex-row items-center gap-2">
@@ -114,6 +152,13 @@ export function ImportScreen() {
             </Button>
           )}
 
+          {!done && !!lastUndoable && (
+            <Press accessibilityRole="button" onPress={() => setConfirmUndo(lastUndoable)} className="h-11 flex-row items-center justify-center gap-2 rounded-xl">
+              <Icon icon={Undo2} size={15} tone="recovery-red-text" />
+              <Text className="text-[12px] font-bold uppercase tracking-[0.08em] text-recovery-red-text">{t("import.undoLast")}</Text>
+            </Press>
+          )}
+
           <View className="flex-row items-center gap-2">
             <Icon icon={History} size={14} tone="muted-foreground" />
             <Text className="text-[12px] text-muted-foreground">
@@ -121,6 +166,16 @@ export function ImportScreen() {
             </Text>
           </View>
         </View>
+      }
+      footer={
+        <ConfirmDialog
+          open={!!confirmUndo}
+          title={t("import.undoTitle")}
+          body={t("import.undoBody", { count: confirmUndo?.sessions ?? 0 })}
+          confirm={t("import.undo")}
+          onCancel={() => setConfirmUndo(null)}
+          onConfirm={() => void runUndo()}
+        />
       }
     />
   );

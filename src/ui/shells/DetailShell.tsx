@@ -23,6 +23,8 @@ export type DetailShellProps = {
   title: string;
   subtitle?: string;
   info?: InfoContent;
+  /** Overrides what Back does (a screen that asks before leaving). */
+  onBack?: () => void;
   /** Overrides the screen Back returns to when there is no history (a deep link). */
   backHref?: string;
   /** `placement: "header"` makes the date the header title (Recovery, Strain, Sleep); else the pill sits under the header. */
@@ -56,11 +58,11 @@ export type DetailShellProps = {
   instant?: boolean;
 };
 
-export function DetailShell({ title, subtitle, info, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction }: DetailShellProps) {
+export function DetailShell({ title, subtitle, info, onBack, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction }: DetailShellProps) {
   const insets = useSafeAreaInsets();
   const side = summary ?? (hero ? insight : null);
   const inHeader = dateSwitcher?.placement === "header";
-  const headerProps = { title, subtitle, info, backHref, dismiss, align, titleIcon, action, dateTitle: inHeader ? dateSwitcher : undefined };
+  const headerProps = { title, subtitle, info, onBack, backHref, dismiss, align, titleIcon, action, dateTitle: inHeader ? dateSwitcher : undefined };
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_ROW);
   const { scrollY, threshold, onScroll, progress } = useCollapse();
   const heroBox = useRef<View>(null);

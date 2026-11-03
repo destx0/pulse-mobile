@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CATALOGUE, resolveExerciseId, searchExercises } from "./catalogue";
 import { importStrongCsv, looksLikeStrong, parseCsvRows } from "./csv";
-import { brzycki, estimate1Rm, epley, platesPerSide, roundLoad, toUnit } from "./load";
+import { brzycki, estimate1Rm, epley, loadText, platesPerSide, roundLoad, toUnit } from "./load";
 import { bestSet, groupByExercise, oneRmSeries, previousSets, recordsOf, setsRecord, volumeOf } from "./stats";
 import type { GymSet } from "./types";
 
@@ -39,6 +39,10 @@ describe("the catalogue", () => {
     expect(hits.every((e) => /incline/i.test(e.name) && /dumbbell/i.test(e.name))).toBe(true);
     expect(searchExercises("zzzz", []).length).toBe(0);
   });
+
+  it("offers the whole catalogue when the picker asks for all of it", () => {
+    expect(searchExercises("", [], 1000)).toHaveLength(CATALOGUE.length);
+  });
 });
 
 describe("one-rep max", () => {
@@ -68,6 +72,12 @@ describe("plates", () => {
     expect(roundLoad(45 * 0.45359237, "lb")).toBe(45);
     expect(toUnit(100, "lb")).toBeCloseTo(220.46, 1);
   });
+
+  it("shows a stored weight without snapping it to a plate step", () => {
+    expect(loadText(62.25, "kg")).toBe("62.25");
+    expect(loadText(45 * 0.45359237, "lb")).toBe("45");
+    expect(loadText(60, "lb")).toBe("132.3");
+  });
 });
 
 describe("the history", () => {
@@ -88,6 +98,16 @@ describe("the history", () => {
     expect(prev?.sessionId).toBe("s2");
     expect(prev?.byNo.get(1)?.weightKg).toBe(70);
     expect(previousSets(sets, "bench-press-barbell", 500)).toBeNull();
+  });
+
+  it("does not let a warmup-only session become the previous column", () => {
+    const only = [
+      set({ id: "a", sessionId: "s1", ts: 1000, weightKg: 70, reps: 5 }),
+      set({ id: "w", sessionId: "s2", ts: 2000, weightKg: 20, reps: 10, type: "warmup" }),
+    ];
+    const prev = previousSets(only, "bench-press-barbell", 3000);
+    expect(prev?.sessionId).toBe("s1");
+    expect(prev?.byNo.get(1)?.weightKg).toBe(70);
   });
 
   it("draws the 1RM curve one point per session", () => {

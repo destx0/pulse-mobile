@@ -29,8 +29,13 @@ export function trimLoad(v: number): string {
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
 }
 
-/** "62.5" or "137.5": the value in `unit`, trimmed. */
-export const loadText = (kg: number, unit: WeightUnit) => trimLoad(roundLoad(kg, unit));
+/** "62.5" or "137.5": the value in `unit`, trimmed but not snapped to a plate step, so showing a stored weight and
+ *  ticking it does not move it by a whole step. Pounds keep one decimal, kilograms two. */
+export const loadText = (kg: number, unit: WeightUnit) => {
+  const v = toUnit(kg, unit);
+  const places = unit === "lb" ? 10 : 100;
+  return String(Math.round(v * places) / places);
+};
 
 /**
  * Epley's estimate: w·(1 + r/30). It is the one the gym world quotes for a set of 1 to 10, and it stays sane for a set

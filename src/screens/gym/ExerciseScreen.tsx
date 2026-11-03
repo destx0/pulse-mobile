@@ -11,7 +11,7 @@ import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
 import { DAY, formatDay } from "@/lib/format";
-import { loadText } from "@/core/gym/load";
+import { loadText, toUnit, trimLoad } from "@/core/gym/load";
 import { push } from "@/ui/navigate";
 import { GymEmpty, MiniLine, StatTile, volumeText } from "./parts";
 
@@ -19,6 +19,8 @@ export function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useTranslation("gym");
   const { data } = useScreen((ctx) => getGymExercise(ctx, id), ["gym-exercise", id]);
+  const unit = data?.exercise.unit ?? "kg";
+  const oneRm = data?.record ? trimLoad(Math.round(toUnit(data.record.oneRm, unit) * 10) / 10) : null;
 
   return (
     <DetailShell
@@ -37,14 +39,30 @@ export function ExerciseScreen() {
                 <View className="gap-1">
                   <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("exercise.record")}</Text>
                   <View className="flex-row items-baseline gap-2">
-                    <Text className="font-numeric text-[34px] font-semibold leading-10">{data.record.oneRm.toFixed(1)}</Text>
-                    <Text className="text-[15px] font-medium text-foreground-secondary">kg</Text>
-                    {data.previousRecord && <Text className="text-[13px] text-muted-foreground">{t("exercise.previousRecord", { value: `${data.previousRecord.oneRm.toFixed(1)} kg` })}</Text>}
+                    <Text className="font-numeric text-[34px] font-semibold leading-10">{oneRm}</Text>
+                    <Text className="text-[15px] font-medium text-foreground-secondary">{unit}</Text>
+                    {data.previousRecord && (
+                      <Text className="text-[13px] text-muted-foreground">
+                        {t("exercise.secondBest", { value: `${trimLoad(Math.round(toUnit(data.previousRecord.oneRm, unit) * 10) / 10)} ${unit}` })}
+                      </Text>
+                    )}
                   </View>
                 </View>
                 <View className="flex-row gap-2">
-                  <StatTile label={t("exercise.bestWeight")} value={`${Math.round(data.record.weightKg)} kg × ${data.record.reps}`} />
-                  <StatTile label={t("exercise.setsTotal", { count: data.totalSets })} value={volumeText(data.totalVolumeKg)} />
+                  <StatTile label={t("exercise.bestWeight")} value={`${loadText(data.record.weightKg, unit)} ${unit} × ${data.record.reps}`} />
+                  <StatTile label={t("exercise.volume")} value={volumeText(data.totalVolumeKg, unit)} aside={t("exercise.setsTotal", { count: data.totalSets })} />
+                </View>
+              </Card>
+            ) : data.history.length ? (
+              <Card className="gap-4 px-4 py-4">
+                <CardFill />
+                <View className="gap-1">
+                  <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("exercise.bodyweight")}</Text>
+                  <Text className="text-[14px] leading-[21px] text-foreground-secondary">{t("exercise.bodyweightBody")}</Text>
+                </View>
+                <View className="flex-row gap-2">
+                  <StatTile label={t("exercise.sets")} value={String(data.totalSets)} />
+                  <StatTile label={t("exercise.reps")} value={String(data.totalReps)} />
                 </View>
               </Card>
             ) : (
@@ -83,13 +101,13 @@ export function ExerciseScreen() {
                         <View className="min-w-0 flex-1">
                           <Text className="text-[14px] font-semibold leading-5">{h.session.name}</Text>
                           <Text className="text-[12px] leading-4 text-muted-foreground">
-                            {formatDay(h.session.day, DAY.short)} · {t("session.setsCount", { count: h.sets.filter((s) => s.completed).length })}
+                            {formatDay(h.session.day, DAY.short)} · {t("session.setsCount", { count: h.sets.filter((s) => s.completed).length })} · {unit}
                           </Text>
                         </View>
                         <Text className="font-numeric text-[14px] font-semibold">
                           {h.sets
                             .filter((s) => s.completed)
-                            .map((s) => (s.seconds && !s.reps ? `${s.seconds}s` : s.distanceM ? `${Math.round(s.distanceM / 10) / 100}km` : `${loadText(s.weightKg, "kg")}×${s.reps}`))
+                            .map((s) => (s.seconds && !s.reps ? `${s.seconds}s` : s.distanceM ? `${Math.round(s.distanceM / 10) / 100}km` : `${loadText(s.weightKg, unit)}×${s.reps}`))
                             .slice(0, 3)
                             .join("  ")}
                         </Text>

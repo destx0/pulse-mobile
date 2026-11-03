@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { markUiRuntime, registerAppStore, runSync, type Source } from "@/background/runSync";
+import { cancelRest } from "@/background/notify";
 import { startBackground } from "@/background/startup";
 import { deleteAllPhotos, deletePhoto } from "@/actions/photo";
 import { openStore } from "@/data/db";
@@ -375,6 +376,8 @@ export async function reset(): Promise<void> {
     await store.clearAll();
     await store.clearGym();
   }
+  // A rest countdown belongs to the gym that was just deleted; it must not fire into a missing session.
+  await cancelRest();
   await resetLeetCode();
   deleteAllPhotos();
   await AsyncStorage.multiRemove([SOURCE_KEY, OWN_PROFILE_KEY]).catch(() => {});

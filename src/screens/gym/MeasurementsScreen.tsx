@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
-import { Ruler, Trash2 } from "lucide-react-native";
+import { ChevronRight, Ruler, Scale, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { deleteMeasurement, saveMeasurement } from "@/actions/gym";
 import { MEASUREMENTS, type MeasurementKind } from "@/core/gym/types";
@@ -15,8 +15,10 @@ import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
 import { Input } from "@/screens/log/fields";
+import { DateTimeField } from "@/screens/log/DateTimeField";
 import { DAY, formatDay } from "@/lib/format";
 import { localDay } from "@/lib/time";
+import { push } from "@/ui/navigate";
 import { ConfirmDialog, GymEmpty, MiniLine } from "./parts";
 
 export function MeasurementsScreen() {
@@ -42,6 +44,15 @@ export function MeasurementsScreen() {
       primary={
         !data ? null : (
           <View className="gap-6">
+            <Press accessibilityRole="button" onPress={() => push("/scale")} className="flex-row items-center gap-3 rounded-xl bg-secondary px-3 py-3">
+              <Icon icon={Scale} size={18} tone="foreground-secondary" />
+              <View className="min-w-0 flex-1">
+                <Text className="text-[14px] font-semibold leading-5">{t("measure.scaleLink")}</Text>
+                <Text className="text-[12px] leading-4 text-muted-foreground">{t("measure.scaleHint")}</Text>
+              </View>
+              <Icon icon={ChevronRight} size={16} tone="muted-foreground" />
+            </Press>
+
             {data.latest.length > 0 ? (
               <Card className="gap-3 px-4 py-4">
                 <CardFill />
@@ -118,7 +129,10 @@ function AddMeasurement({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation("gym");
   const [kind, setKind] = useState<MeasurementKind>("weight");
   const [value, setValue] = useState("");
+  const [today] = useState(() => localDay(Math.floor(Date.now() / 1000), actionCtx().timeZone));
+  const [day, setDay] = useState(today);
   const unit = MEASUREMENTS.find((m) => m.kind === kind)?.unit ?? "";
+  const parsed = parseFloat(value.replace(",", "."));
   return (
     <View className="mb-8 gap-3 rounded-2xl bg-card p-4">
       <View className="flex-row flex-wrap gap-1.5">
@@ -134,6 +148,10 @@ function AddMeasurement({ onDone }: { onDone: () => void }) {
           </Press>
         ))}
       </View>
+      <View className="gap-1.5">
+        <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("measure.day")}</Text>
+        <DateTimeField value={day} onChange={setDay} mode="date" max={today} label={t("measure.day")} />
+      </View>
       <View className="flex-row items-center gap-2">
         <Input autoFocus value={value} onChangeText={setValue} keyboardType="decimal-pad" placeholder="0" className="flex-1" />
         <Text className="text-[14px] font-medium text-muted-foreground">{unit}</Text>
@@ -144,12 +162,10 @@ function AddMeasurement({ onDone }: { onDone: () => void }) {
         </Button>
         <Button
           className="flex-1"
-          disabled={!value.trim()}
+          disabled={!Number.isFinite(parsed) || parsed <= 0 || parsed > 1000}
           onPress={async () => {
-            const n = parseFloat(value.replace(",", "."));
-            if (!Number.isFinite(n)) return;
-            const day = localDay(Math.floor(Date.now() / 1000), actionCtx().timeZone);
-            await saveMeasurement(actionCtx().store, { day, kind, value: n });
+            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1000) return;
+            await saveMeasurement(actionCtx().store, { day, kind, value: parsed });
             dataChanged();
             onDone();
           }}

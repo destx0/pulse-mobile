@@ -13,6 +13,9 @@ export const volumeOf = (sets: readonly GymSet[]) => sets.reduce((sum, s) => (is
 
 export const workSets = (sets: readonly GymSet[]) => sets.filter(isWorkSet);
 
+/** True when a session has at least one ticked working set: an empty workout is not a workout. */
+export const hasWork = (sets: readonly GymSet[]) => sets.some(isWorkSet);
+
 /** The set types that still log a weight and reps. */
 export const isRepSet = (s: Pick<GymSet, "seconds" | "distanceM">) => !s.seconds && !s.distanceM;
 
@@ -60,19 +63,33 @@ export function recordsOf(sets: readonly GymSet[]): Map<string, PersonalRecord> 
 /**
  * The "previous" column at the start of a session: the most recent session before `beforeTs` that trained this
  * exercise, and its sets by set number. `all` may hold every set in the database.
+ *
+ * A session that only warmed up is not a reference: the column reads the last session with a ticked working set, the
+ * way a lifter remembers "what I did last time". The sets map still carries that session's warmups, so set 1 shows
+ * what set 1 was, but a warmup-only workout never becomes the whole column.
  */
 export function previousSets(all: readonly GymSet[], exerciseId: string, beforeTs: number): { sessionId: string; ts: number; byNo: Map<number, GymSet> } | null {
-  let last: GymSet | null = null;
-  for (const s of all) {
-    if (s.exerciseId !== exerciseId || !s.completed || s.ts == null || s.ts >= beforeTs) continue;
-    if (!last || s.ts > last.ts!) last = s;
+  const mine = all.filter((s) => s.exerciseId === exerciseId && s.completed && s.ts != null && s.ts < beforeTs);
+  if (!mine.length) return null;
+  const bySession = new Map<string, GymSet[]>();
+  for (const s of mine) {
+    const list = bySession.get(s.sessionId);
+    if (list) list.push(s);
+    else bySession.set(s.sessionId, [s]);
   }
-  if (!last) return null;
+  const withWork = [...bySession.values()].filter(hasWork);
+  const candidates = withWork.length ? withWork : [...bySession.values()];
+  const chosen = candidates.reduce((best, list) => (Math.max(...list.map((s) => s.ts!)) > Math.max(...best.map((s) => s.ts!)) ? list : best));
+  const last = chosen.reduce((best, s) => (s.ts! > best.ts! ? s : best));
   const byNo = new Map<number, GymSet>();
   for (const s of all) {
     if (s.sessionId !== last.sessionId || s.exerciseId !== exerciseId) continue;
     const seen = byNo.get(s.setNo);
-    if (!seen || (s.completed && !seen.completed)) byNo.set(s.setNo, s);
+    const better =
+      !seen ||
+      (s.completed && !seen.completed) ||
+      (s.completed === seen.completed && s.type !== "warmup" && seen.type === "warmup");
+    if (better) byNo.set(s.setNo, s);
   }
   return { sessionId: last.sessionId, ts: last.ts!, byNo };
 }

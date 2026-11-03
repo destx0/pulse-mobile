@@ -4,12 +4,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from "react-native";
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useLocalSearchParams } from "expo-router";
-import { Check, Clock, Dumbbell, History, MoreHorizontal, Plus, Scale, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Check, Clock, Copy, Dumbbell, History, MoreHorizontal, NotebookPen, Plus, Scale, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
-import { addSet, deleteSet, discardSession, finishSession, saveSet, setExerciseUnit, setSuperset, startRest, stopRest, updateSession } from "@/actions/gym";
+import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, startRest, stopRest, updateSession } from "@/actions/gym";
+import { cancelRest, scheduleRest } from "@/background/notify";
 import { fromUnit, loadText } from "@/core/gym/load";
+import { isWorkSet } from "@/core/gym/stats";
 import type { GymExercise, GymSession, GymSet, SetType } from "@/core/gym/types";
 import type { Block } from "@/queries/gym";
 import { getGymSession } from "@/queries/gym";
@@ -18,16 +21,18 @@ import { i18n } from "@/i18n/config";
 import { Button } from "@/ui/Button";
 import { Card, CardFill, useCardStyle } from "@/ui/Card";
 import { cn } from "@/ui/cn";
+import { haptic } from "@/ui/haptics";
 import { Icon } from "@/ui/Icon";
 import { MenuPanel, useMenu } from "@/ui/Menu";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
 import { DetailShell } from "@/ui/shells/DetailShell";
 import { FACES } from "@/ui/fontClasses";
+import { toast } from "@/ui/Toast";
 import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
 import { useTheme } from "@/ui/theme";
-import { ConfirmDialog, MenuItem, clockText, lengthText, useNow, whenText } from "./parts";
+import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText, whenText } from "./parts";
 
 /** The rest a ticked set starts, in seconds. Strong's default; a routine's own rest is not carried yet. */
 const DEFAULT_REST = 90;
@@ -40,16 +45,44 @@ export function SessionScreen() {
   const now = useNow();
   const [confirm, setConfirm] = useState<"finish" | "discard" | "delete" | null>(null);
   const [rename, setRename] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const notifyWarned = useRef(false);
+  // The rows an Undo has just put back: they pulse once, so the eye finds where they landed.
+  const [flash, setFlash] = useState<{ ids: string[]; at: number } | null>(null);
+  const flashAt = useRef(0);
+  const flashRows = (sets: GymSet[]) => setFlash({ ids: sets.map((s) => s.id), at: ++flashAt.current });
   const { ref: menuRef, anchor, open: openMenu, close: closeMenu } = useMenu();
 
+  const current = vm?.session ?? null;
+  const restLeft = current?.restStartedTs && current.restSec ? Math.max(0, current.restStartedTs + current.restSec - now) : 0;
+  // A rest that ends while the screen is open gets a haptic; a skip clears restStartedTs first, so it stays silent.
+  const wasResting = useRef(false);
+  useEffect(() => {
+    if (restLeft > 0) {
+      wasResting.current = true;
+      return;
+    }
+    if (!wasResting.current) return;
+    wasResting.current = false;
+    if (current?.restStartedTs) {
+      haptic.success();
+      void cancelRest();
+    }
+  }, [restLeft, current?.restStartedTs]);
+
+  if (vm === null) {
+    return (
+      <DetailShell title={t("session.title")} floatingAction={false} backHref="/gym" primary={<GymEmpty icon={Dumbbell} title={t("session.notFound")} body={t("session.notFoundBody")} />} />
+    );
+  }
   if (!vm) {
     return <DetailShell title={t("session.title")} loading bodySkeleton={<View className="h-40" />} />;
   }
 
   const { session } = vm;
   const elapsed = Math.max(0, (session.endTs ?? now) - session.startTs);
-  const restLeft = session.restStartedTs && session.restSec ? Math.max(0, session.restStartedTs + session.restSec - now) : 0;
   const store = actionCtx().store;
+  const sessionUrl = `/gym/session/${session.id}`;
 
   const save = async (set: GymSet, draft: Draft) => {
     await saveSet(store, { ...set, ...draft });
@@ -57,37 +90,92 @@ export function SessionScreen() {
   };
   const tick = async (set: GymSet, draft: Draft) => {
     const on = !set.completed;
+    if (on && draft.reps <= 0 && !(draft.seconds && draft.seconds > 0) && !(draft.distanceM && draft.distanceM > 0)) {
+      toast.error(t("session.emptySet"));
+      return;
+    }
     await saveSet(store, { ...set, ...draft, completed: on, ts: on ? now : null });
+    if (on) haptic.tap();
     // A superset rests only after its other exercise has nothing left to tick.
     const group = set.supersetId ? vm.blocks.filter((b) => b.sets.some((s) => s.supersetId === set.supersetId)) : [];
     const waiting = group.some((b) => b.exercise.id !== set.exerciseId && b.sets.some((s) => !s.completed));
-    if (on && !waiting) await startRest(store, session, DEFAULT_REST, now);
+    // A rest after the very last set is a countdown to nothing: only start one when a set is still ahead.
+    const remaining = vm.blocks.some((b) => b.sets.some((s) => s.id !== set.id && !s.completed));
+    if (on && !waiting && remaining) {
+      await startRest(store, session, DEFAULT_REST, now);
+      void scheduleRest(now + DEFAULT_REST, sessionUrl).then((ok) => {
+        if (!ok && !notifyWarned.current) {
+          notifyWarned.current = true;
+          toast.info(t("session.restNotifyOff"));
+        }
+      });
+    }
     dataChanged();
   };
   const linkSuperset = async (block: Block, next: Block | null, on: boolean) => {
     await setSuperset(store, session.id, block.exercise.id, next?.exercise.id ?? null, on ? newId() : null);
     dataChanged();
   };
-  const retype = async (set: GymSet, type: SetType) => {
-    await saveSet(store, { ...set, type });
-    dataChanged();
-  };
-  const note = async (set: GymSet, text: string) => {
-    await saveSet(store, { ...set, note: text });
+  const details = async (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) => {
+    await saveSet(store, { ...set, ...patch });
     dataChanged();
   };
   const removeSet = async (set: GymSet) => {
     await deleteSet(store, set);
     dataChanged();
+    toast.undo(t("session.setRemoved", { number: set.setNo }), {
+      label: t("session.undo"),
+      onPress: async () => {
+        await restoreSet(store, set);
+        dataChanged();
+        flashRows([set]);
+      },
+    });
   };
   const removeExercise = async (block: Block) => {
-    for (const s of block.sets) await store.deleteGymSet(s.id);
+    const removed = block.sets;
+    for (const s of removed) await store.deleteGymSet(s.id);
     dataChanged();
+    toast.undo(t("session.exerciseRemoved", { name: block.exercise.name }), {
+      label: t("session.undo"),
+      onPress: async () => {
+        await restoreSets(store, removed);
+        dataChanged();
+        flashRows(removed);
+      },
+    });
   };
   const addOne = async (block: Block) => {
     await addSet(store, session.id, block.exercise.id);
     dataChanged();
   };
+  const move = async (block: Block, delta: -1 | 1) => {
+    await moveExercise(store, session.id, block.exercise.id, delta);
+    dataChanged();
+  };
+  const skipRest = async () => {
+    wasResting.current = false;
+    await stopRest(store, session);
+    void cancelRest();
+    dataChanged();
+  };
+  const adjust = async (delta: number) => {
+    const next = await adjustRest(store, session, delta);
+    dataChanged();
+    if (next.restStartedTs && next.restSec && next.restStartedTs + next.restSec > now) void scheduleRest(next.restStartedTs + next.restSec, sessionUrl);
+    else void cancelRest();
+  };
+  const saveTemplate = async () => {
+    const routine = await saveSessionAsRoutine(store, session, now);
+    if (!routine) return;
+    await updateSession(store, session, { routineId: routine.id });
+    dataChanged();
+    toast.success(t("session.templateSaved", { name: routine.name }));
+  };
+
+  const empty = !vm.blocks.some((b) => b.sets.some(isWorkSet));
+  const pending = vm.blocks.reduce((n, b) => n + b.sets.filter((s) => !s.completed).length, 0);
+  const unit = vm.blocks.length && vm.blocks.every((b) => b.exercise.unit === "lb") ? "lb" : "kg";
 
   return (
     <View className="flex-1">
@@ -125,9 +213,39 @@ export function SessionScreen() {
             </View>
           }
           primary={
-            vm.blocks.length ? (
-              <View className="gap-4">
-                {vm.blocks.map((block, index) => (
+            <View className="gap-4">
+              {session.finished && !empty && (
+                <Card className="gap-4 px-4 py-4">
+                  <CardFill />
+                  <View className="flex-row items-center gap-2">
+                    <Icon icon={Check} size={16} tone="strain" strokeWidth={2.6} />
+                    <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain">{t("session.complete")}</Text>
+                  </View>
+                  <View className="flex-row gap-2">
+                    <StatTile label={t("session.duration")} value={session.endTs ? lengthText(session.endTs - session.startTs) : lengthText(elapsed)} />
+                    <StatTile label={t("session.sets")} value={String(vm.setCount)} />
+                    <StatTile label={t("session.volume")} value={volumeText(vm.volumeKg, unit)} />
+                  </View>
+                  {vm.newRecords.length > 0 && (
+                    <View className="gap-1.5">
+                      <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("session.newRecords")}</Text>
+                      {vm.newRecords.map((r) => (
+                        <Text key={r.exercise.id} className="text-[13px] leading-[19px] text-foreground-secondary">
+                          {`${r.exercise.name}: ${loadText(r.weightKg, r.exercise.unit)} ${r.exercise.unit} × ${r.reps}`}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {!session.routineId && (
+                    <Button variant="secondary" onPress={() => void saveTemplate()}>
+                      {t("session.saveTemplate")}
+                    </Button>
+                  )}
+                </Card>
+              )}
+
+              {vm.blocks.length ? (
+                vm.blocks.map((block, index) => (
                   <BlockCard
                     key={block.exercise.id}
                     block={block}
@@ -136,47 +254,68 @@ export function SessionScreen() {
                     session={session}
                     onSave={save}
                     onTick={tick}
-                    onType={retype}
-                    onNote={note}
+                    onDetails={details}
                     onRemoveSet={removeSet}
                     onRemoveExercise={removeExercise}
                     onAddSet={addOne}
+                    onMove={(delta) => void move(block, delta)}
+                    canUp={index > 0}
+                    canDown={index < vm.blocks.length - 1}
+                    prSetIds={vm.prSetIds}
+                    flash={flash}
                   />
-                ))}
-              </View>
-            ) : (
-              <Card className="items-center gap-3 px-4 py-8">
-                <CardFill />
-                <Icon icon={Dumbbell} size={24} tone="muted-foreground" />
-                <Text className="text-center text-[15px] text-foreground-secondary">{t("session.empty")}</Text>
-                <Button variant="secondary" onPress={() => push(`/gym/exercises?session=${session.id}`)}>
-                  {t("session.addExercise")}
-                </Button>
-              </Card>
-            )
+                ))
+              ) : (
+                <Card className="items-center gap-3 px-4 py-8">
+                  <CardFill />
+                  <Icon icon={Dumbbell} size={24} tone="muted-foreground" />
+                  <Text className="text-center text-[15px] text-foreground-secondary">{t("session.empty")}</Text>
+                  <Button variant="secondary" onPress={() => push(`/gym/exercises?session=${session.id}`)}>
+                    {t("session.addExercise")}
+                  </Button>
+                </Card>
+              )}
+
+              {!!session.notes && (
+                <Press accessibilityRole="button" onPress={() => setNotesOpen(true)} className="gap-1 rounded-2xl bg-secondary px-4 py-3">
+                  <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("session.notes")}</Text>
+                  <Text className="text-[14px] leading-[21px] text-foreground-secondary">{session.notes}</Text>
+                </Press>
+              )}
+            </View>
           }
         />
 
         <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
           <MenuItem icon={Dumbbell} label={t("session.rename")} onPress={() => (closeMenu(), setRename(true))} />
+          <MenuItem icon={NotebookPen} label={t("session.notes")} onPress={() => (closeMenu(), setNotesOpen(true))} />
           <MenuItem icon={History} label={t("session.addExercise")} onPress={() => (closeMenu(), push(`/gym/exercises?session=${session.id}`))} />
           {!session.finished && <MenuItem icon={Trash2} label={t("session.discard")} danger onPress={() => (closeMenu(), setConfirm("discard"))} />}
           {session.finished && <MenuItem icon={Trash2} label={t("session.delete")} danger onPress={() => (closeMenu(), setConfirm("delete"))} />}
         </MenuPanel>
 
-        {restLeft > 0 && <RestBar left={restLeft} total={session.restSec ?? DEFAULT_REST} onSkip={() => void stopRest(store, session).then(dataChanged)} />}
+        {restLeft > 0 && <RestBar left={restLeft} total={session.restSec ?? DEFAULT_REST} onSkip={() => void skipRest()} onAdjust={(d) => void adjust(d)} />}
       </KeyboardAvoidingView>
 
       <ConfirmDialog
         open={confirm === "finish"}
-        title={t("session.finishTitle")}
-        body={t("session.finishBody", { sets: vm.setCount, time: clockText(elapsed) })}
-        confirm={t("session.finish")}
+        title={empty ? t("session.emptyFinishTitle") : t("session.finishTitle")}
+        body={empty ? t("session.emptyFinishBody") : `${t("session.finishBody", { sets: vm.setCount, time: clockText(elapsed) })}${pending ? ` ${t("session.finishPending", { count: pending })}` : ""}`}
+        confirm={empty ? t("session.discardConfirm") : t("session.finish")}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
           setConfirm(null);
+          wasResting.current = false;
+          void cancelRest();
+          if (empty) {
+            await discardSession(store, session.id);
+            dataChanged();
+            goBack();
+            return;
+          }
           await finishSession(store, session, now);
           dataChanged();
+          toast.success(t("session.saved"));
         }}
       />
       <ConfirmDialog
@@ -188,6 +327,8 @@ export function SessionScreen() {
         onConfirm={async () => {
           const was = confirm;
           setConfirm(null);
+          wasResting.current = false;
+          void cancelRest();
           await discardSession(store, session.id);
           dataChanged();
           if (was) goBack();
@@ -200,6 +341,17 @@ export function SessionScreen() {
           onSave={async (name) => {
             setRename(false);
             await updateSession(store, session, { name });
+            dataChanged();
+          }}
+        />
+      )}
+      {notesOpen && (
+        <NotesDialog
+          initial={session.notes ?? ""}
+          onClose={() => setNotesOpen(false)}
+          onSave={async (notes) => {
+            setNotesOpen(false);
+            await updateSession(store, session, { notes });
             dataChanged();
           }}
         />
@@ -218,11 +370,15 @@ function BlockCard({
   session,
   onSave,
   onTick,
-  onType,
-  onNote,
+  onDetails,
   onRemoveSet,
   onRemoveExercise,
   onAddSet,
+  onMove,
+  canUp,
+  canDown,
+  prSetIds,
+  flash,
 }: {
   block: Block;
   next: Block | null;
@@ -230,11 +386,15 @@ function BlockCard({
   session: GymSession;
   onSave: (set: GymSet, d: Draft) => void;
   onTick: (set: GymSet, d: Draft) => void;
-  onType: (set: GymSet, t: SetType) => void;
-  onNote: (set: GymSet, text: string) => void;
+  onDetails: (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) => void;
   onRemoveSet: (set: GymSet) => void;
   onRemoveExercise: (block: Block) => void;
   onAddSet: (block: Block) => void;
+  onMove: (delta: -1 | 1) => void;
+  canUp: boolean;
+  canDown: boolean;
+  prSetIds: string[];
+  flash: { ids: string[]; at: number } | null;
 }) {
   const { t } = useTranslation("gym");
   const { exercise } = block;
@@ -246,7 +406,8 @@ function BlockCard({
   const cardio = exercise.bodyPart === "cardio";
   const hold = exercise.hold || block.sets.some((s) => !!s.seconds && !s.reps);
   const [now] = useState(() => Math.floor(Date.now() / 1000));
-  // Strong's "+0%": today's volume against the last time this exercise was done.
+  // Strong's "+0%" against the last time this exercise was done. An unchanged volume shows nothing: "− 0" is noise,
+  // and the absence is the honest reading (OpenGym's rule for a weight that has not moved).
   const lastVolume = block.prev.reduce((n, s) => n + (s && s.type !== "warmup" ? s.weightKg * s.reps : 0), 0);
   const nowVolume = block.sets.reduce((n, s) => n + (s.completed && s.type !== "warmup" ? s.weightKg * s.reps : 0), 0);
   const delta = lastVolume > 0 && nowVolume > 0 ? Math.round(((nowVolume - lastVolume) / lastVolume) * 100) : null;
@@ -266,7 +427,7 @@ function BlockCard({
             <Text className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground">{t("session.superset")}</Text>
           </View>
         )}
-        {delta != null && <Text className={cn("font-numeric text-[12px] font-semibold", delta >= 0 ? "text-strain" : "text-recovery-red-text")}>{`${delta >= 0 ? "+" : ""}${delta}%`}</Text>}
+        {delta != null && delta !== 0 && <Text className={cn("font-numeric text-[12px] font-semibold tabular-nums", delta > 0 ? "text-strain" : "text-recovery-red-text")}>{`${delta > 0 ? "+" : ""}${delta}%`}</Text>}
         <View ref={menuRef} collapsable={false}>
           <Press accessibilityRole="button" accessibilityLabel={t("session.exerciseMenu")} hitSlop={10} onPress={openMenu} className="size-7 items-center justify-center">
             <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
@@ -294,9 +455,21 @@ function BlockCard({
             unit={unit}
             cardio={cardio}
             hold={hold}
+            pr={prSetIds.includes(set.id)}
+            flashAt={flash?.ids.includes(set.id) ? flash.at : 0}
             onSave={(d) => onSave(set, d)}
             onTick={(d) => onTick(set, d)}
             onMenu={() => setNoting(set)}
+            onCopyPrev={() => {
+              const p = block.prev[i];
+              if (!p) return;
+              onSave(set, {
+                weightKg: p.weightKg,
+                reps: p.reps,
+                seconds: p.seconds,
+                distanceM: p.distanceM,
+              });
+            }}
           />
         ))}
       </View>
@@ -306,6 +479,8 @@ function BlockCard({
       </Press>
 
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
+        {canUp && <MenuItem icon={ArrowUp} label={t("session.moveUp")} onPress={() => (closeMenu(), onMove(-1))} />}
+        {canDown && <MenuItem icon={ArrowDown} label={t("session.moveDown")} onPress={() => (closeMenu(), onMove(1))} />}
         {supersetId ? (
           <MenuItem icon={Scale} label={t("session.removeSuperset")} onPress={() => (closeMenu(), onSuperset(block, null, false))} />
         ) : next ? (
@@ -329,15 +504,13 @@ function BlockCard({
       />
       {noting && (
         <NoteDialog
+          number={noting.setNo}
           initial={noting.note ?? ""}
           type={noting.type}
-          onType={(type) => {
-            onType(noting, type);
-            setNoting(null);
-          }}
+          rpe={noting.rpe}
           onClose={() => setNoting(null)}
-          onSave={(text) => {
-            onNote(noting, text);
+          onSave={(type, note, rpe) => {
+            onDetails(noting, { type, note, rpe });
             setNoting(null);
           }}
           onDelete={() => {
@@ -346,26 +519,35 @@ function BlockCard({
           }}
         />
       )}
-      {/* A note on any set shows under the exercise: the file's notes, and the ones typed here. */}
-      {block.sets.some((s) => s.note) && (
+      {/* A note or an RPE on any set shows under the exercise: the file's notes, and the ones typed here. */}
+      {block.sets.some((s) => s.note || s.rpe) && (
         <View className="mt-1 gap-1 px-1">
           {block.sets
-            .filter((s) => s.note)
+            .filter((s) => s.note || s.rpe)
             .map((s) => (
               <Text key={s.id} className="text-[12px] leading-4 text-muted-foreground" onPress={() => setNoting(s)}>
-                {`${s.setNo}. ${s.note}`}
+                {`${s.setNo}. ${[s.note, s.rpe ? `${t("session.rpe")} ${s.rpe}` : null].filter(Boolean).join(" · ")}`}
               </Text>
             ))}
         </View>
       )}
-      <Text className="mt-1 px-1 text-[11px] text-muted-foreground">{whenText(block.prev[0]?.ts ?? null, now)}</Text>
+      {!!block.prev[0]?.ts && <Text className="mt-1 px-1 text-[11px] text-muted-foreground">{t("session.lastDone", { when: whenText(block.prev[0].ts, now) })}</Text>}
     </Card>
   );
 }
 
 /** One set: number, last time, weight, reps, tick. */
-function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set: GymSet; prev: GymSet | null; unit: "kg" | "lb"; cardio: boolean; hold: boolean; onSave: (d: Draft) => void; onTick: (d: Draft) => void; onMenu: () => void }) {
+function SetRow({ set, prev, unit, cardio, hold, pr, flashAt, onSave, onTick, onMenu, onCopyPrev }: { set: GymSet; prev: GymSet | null; unit: "kg" | "lb"; cardio: boolean; hold: boolean; pr: boolean; flashAt: number; onSave: (d: Draft) => void; onTick: (d: Draft) => void; onMenu: () => void; onCopyPrev: () => void }) {
   const { t } = useTranslation("gym");
+  const reduce = useReducedMotion();
+  const glow = useSharedValue(0);
+  // A row an Undo has just brought back pulses once, so the eye finds it. No pulse under reduced motion.
+  useEffect(() => {
+    if (!flashAt || reduce) return;
+    glow.value = 0.18;
+    glow.value = withTiming(0, { duration: 800 });
+  }, [flashAt, reduce, glow]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value }));
   const [weight, setWeight] = useState(() => loadText(set.weightKg, unit));
   const [reps, setReps] = useState(() => String(set.reps));
   const [secs, setSecs] = useState(() => (set.seconds ? String(Math.round(set.seconds)) : ""));
@@ -407,19 +589,29 @@ function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set
 
   return (
     <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-2 rounded-lg px-1 py-1">
-      <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center">
+      <Animated.View pointerEvents="none" className="absolute inset-0 rounded-lg bg-strain" style={glowStyle} />
+      <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center" accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`}>
         <Text className={cn("font-numeric text-[13px]", set.completed ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
-      <Text className="min-w-0 flex-1 font-numeric text-[12px] leading-4 text-muted-foreground" numberOfLines={1}>
-        {prevText}
-      </Text>
+      <Press
+        accessibilityRole="button"
+        accessibilityLabel={t("session.usePrevious")}
+        onPress={prev ? onCopyPrev : undefined}
+        className="min-w-0 flex-1 flex-row items-center gap-1"
+      >
+        {pr && <Text className="text-[10px] font-bold uppercase tracking-[0.04em] text-strain">{t("session.record")}</Text>}
+        <Text className="shrink font-numeric text-[12px] leading-4 text-muted-foreground" numberOfLines={1}>
+          {prevText}
+        </Text>
+        {!!prev && <Icon icon={Copy} size={11} tone="muted-foreground" />}
+      </Press>
       {!hold && (
-        <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="w-[62px]" dim={set.completed} />
+        <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="w-[62px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
       )}
-      {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="w-[62px]" dim={set.completed} />}
-      {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="w-[54px]" dim={set.completed} />}
-      {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="w-[54px]" dim={set.completed} />}
-      {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="w-[54px]" dim={set.completed} />}
+      {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="w-[62px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
+      {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
+      {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
+      {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="w-[54px]" dim={set.completed} label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
       <Press
         accessibilityRole="checkbox"
         accessibilityState={{ checked: set.completed }}
@@ -434,7 +626,7 @@ function SetRow({ set, prev, unit, cardio, hold, onSave, onTick, onMenu }: { set
 }
 
 /** The number cell: a filled rounded box, the way Strong draws a set's weight. */
-function NumCell({ value, onChangeText, onEnd, className, dim }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; dim?: boolean }) {
+function NumCell({ value, onChangeText, onEnd, className, dim, label }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; dim?: boolean; label: string }) {
   const { c } = useTheme();
   return (
     <TextInput
@@ -446,35 +638,60 @@ function NumCell({ value, onChangeText, onEnd, className, dim }: { value: string
       selectTextOnFocus
       returnKeyType="done"
       placeholder="0"
+      accessibilityLabel={label}
       placeholderTextColor={c["muted-foreground"]}
       className={cn("h-9 rounded-lg bg-secondary text-center font-numeric text-[15px] font-semibold text-foreground", dim && "text-muted-foreground", className)}
       // Android gives a TextInput font padding above the line, which a 36 px box then clips: a 0 lost its top and read
       // as a U ("10" as "IU"). No padding, no extra font padding, and the glyph sits centred.
-      style={{ paddingVertical: 0, includeFontPadding: false, textAlignVertical: "center", fontFamily: FACES.numeric.semibold }}
+      style={{ paddingVertical: 0, includeFontPadding: false, textAlignVertical: "center", fontFamily: FACES.numeric.semibold, fontVariant: ["tabular-nums"] }}
     />
   );
 }
 
 /** The rest countdown, a bar at the foot of the screen. It reads the session's start instant, so it stays right if the
  *  phone slept through it. */
-function RestBar({ left, total, onSkip }: { left: number; total: number; onSkip: () => void }) {
+function RestBar({ left, total, onSkip, onAdjust }: { left: number; total: number; onSkip: () => void; onAdjust: (delta: number) => void }) {
   const { t } = useTranslation("gym");
   const cardStyle = useCardStyle("overlay");
-  const share = Math.max(0, Math.min(1, left / total));
+  // The bar's total stays the one it opened with: ±15 turns the clock, it does not rescale the whole bar under the thumb.
+  const [openedWith] = useState(total);
+  const share = Math.max(0, Math.min(1, left / Math.max(1, openedWith)));
+  const reduce = useReducedMotion();
+  const scale = useSharedValue(share);
+  const mounted = useRef(false);
+  // The clock arrives a second at a time; the bar sweeps between ticks instead of stepping, and it scales rather than
+  // resizes, so a second of movement never relayouts the card. A rest opened mid-count snaps to where it is, and so
+  // does a jump (a phone that slept, a ±15 press): only one-second steps are worth animating.
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      scale.value = share;
+      return;
+    }
+    const jump = Math.abs(share - scale.value) > 2 / total;
+    scale.value = reduce || jump ? share : withTiming(share, { duration: 1000, easing: Easing.linear });
+  }, [share, total, reduce, scale]);
+  const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: scale.value }] }));
   return (
     <View className="absolute inset-x-3 bottom-3 overflow-hidden rounded-2xl bg-card px-4 py-3" style={cardStyle}>
       <View className="flex-row items-center gap-3">
         <Icon icon={Clock} size={18} tone="strain" />
         <View className="min-w-0 flex-1 gap-1">
           <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("session.rest")}</Text>
-          <Text className="font-numeric text-[18px] font-semibold leading-6">{clockText(left)}</Text>
+          <Text className="font-numeric text-[18px] font-semibold leading-6 tabular-nums">{clockText(left)}</Text>
         </View>
+        <Press accessibilityRole="button" accessibilityLabel={t("session.restMinus")} onPress={() => onAdjust(-15)} className="h-9 w-11 items-center justify-center rounded-full bg-secondary">
+          <Text className="text-[12px] font-bold tabular-nums">{`-15`}</Text>
+        </Press>
+        <Press accessibilityRole="button" accessibilityLabel={t("session.restPlus")} onPress={() => onAdjust(15)} className="h-9 w-11 items-center justify-center rounded-full bg-secondary">
+          <Text className="text-[12px] font-bold tabular-nums">{`+15`}</Text>
+        </Press>
         <Press accessibilityRole="button" onPress={onSkip} className="h-9 items-center justify-center rounded-full bg-secondary px-4">
           <Text className="text-[12px] font-bold uppercase tracking-[0.08em]">{t("session.restSkip")}</Text>
         </Press>
       </View>
       <View className="mt-2 h-1 overflow-hidden rounded-full bg-secondary">
-        <View className="h-full rounded-full bg-strain" style={{ width: `${share * 100}%` }} />
+        <Animated.View className="h-full w-full rounded-full bg-strain" style={[fill, { transformOrigin: "left" }]} />
       </View>
     </View>
   );
@@ -502,31 +719,65 @@ function RenameDialog({ initial, onClose, onSave }: { initial: string; onClose: 
   );
 }
 
-/** A set's note, and the way to delete the set or change what it was. */
-function NoteDialog({ initial, type, onType, onClose, onSave, onDelete }: { initial: string; type: SetType; onType: (type: SetType) => void; onClose: () => void; onSave: (text: string) => void; onDelete?: () => void }) {
+/** A set's details: what it was (working, warmup, drop, failure), its RPE, its note, and the way to delete it. */
+function NoteDialog({
+  number,
+  initial,
+  type,
+  rpe,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  number: number;
+  initial: string;
+  type: SetType;
+  rpe: number | null;
+  onClose: () => void;
+  onSave: (type: SetType, note: string, rpe: number | null) => void;
+  onDelete?: () => void;
+}) {
   const { t } = useTranslation("gym");
   const [text, setText] = useState(initial);
+  const [kind, setKind] = useState<SetType>(type);
+  const [effort, setEffort] = useState<number | null>(rpe);
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <Pressable onPress={onClose} className="flex-1 items-center justify-center bg-dim-strong px-4">
         <Pressable onPress={() => {}} className="w-full max-w-[384px] gap-4 rounded-3xl bg-popover p-5">
-          <Text className="text-[17px] font-semibold">{t("session.notePlaceholder")}</Text>
+          <Text className="text-[17px] font-semibold">{t("session.setDetails", { number })}</Text>
           <View className="flex-row flex-wrap gap-1.5">
-            {(["normal", "warmup", "drop", "failure"] as const).map((kind) => (
+            {(["normal", "warmup", "drop", "failure"] as const).map((option) => (
               <Text
-                key={kind}
-                onPress={() => onType(kind)}
+                key={option}
+                onPress={() => setKind(option)}
                 accessibilityRole="button"
-                accessibilityState={{ selected: type === kind }}
-                className={cn("h-8 rounded-full px-3 text-center text-[12px] font-medium leading-8", type === kind ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground")}
+                accessibilityState={{ selected: kind === option }}
+                className={cn("h-8 rounded-full px-3 text-center text-[12px] font-medium leading-8", kind === option ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground")}
               >
-                {t(`session.${kind}`)}
+                {t(`session.${option}`)}
               </Text>
             ))}
           </View>
-          <Input autoFocus multiline value={text} onChangeText={setText} placeholder={t("session.notePlaceholder")} maxLength={240} className="min-h-20" />
+          <View className="gap-1.5">
+            <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("session.rpe")}</Text>
+            <View className="flex-row flex-wrap gap-1.5">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((value) => (
+                <Text
+                  key={value}
+                  onPress={() => setEffort(effort === value ? null : value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: effort === value }}
+                  className={cn("h-8 w-9 rounded-full text-center text-[12px] font-medium leading-8", effort === value ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground")}
+                >
+                  {value}
+                </Text>
+              ))}
+            </View>
+          </View>
+          <Input multiline value={text} onChangeText={setText} placeholder={t("session.notePlaceholder")} maxLength={240} className="min-h-20" />
           <View className="gap-2">
-            <Button onPress={() => onSave(text)}>{t("session.save")}</Button>
+            <Button onPress={() => onSave(kind, text, effort)}>{t("session.save")}</Button>
             <Button variant="outline" onPress={onClose}>
               {i18n.t("common:actions.cancel")}
             </Button>
@@ -535,6 +786,28 @@ function NoteDialog({ initial, type, onType, onClose, onSave, onDelete }: { init
                 {t("session.delete")}
               </Button>
             )}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/** The workout's own note: an imported Strong note, or how the session felt. */
+function NotesDialog({ initial, onClose, onSave }: { initial: string; onClose: () => void; onSave: (text: string) => void }) {
+  const { t } = useTranslation("gym");
+  const [text, setText] = useState(initial);
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable onPress={onClose} className="flex-1 items-center justify-center bg-dim-strong px-4">
+        <Pressable onPress={() => {}} className="w-full max-w-[384px] gap-4 rounded-3xl bg-popover p-5">
+          <Text className="text-[17px] font-semibold">{t("session.notes")}</Text>
+          <Input autoFocus multiline value={text} onChangeText={setText} placeholder={t("session.notesPlaceholder")} maxLength={1000} className="min-h-28" />
+          <View className="gap-2">
+            <Button onPress={() => onSave(text)}>{t("session.save")}</Button>
+            <Button variant="outline" onPress={onClose}>
+              {i18n.t("common:actions.cancel")}
+            </Button>
           </View>
         </Pressable>
       </Pressable>

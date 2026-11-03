@@ -29,17 +29,19 @@ export function clockText(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-/** "48 min", "1 h 12": how long a finished workout took. */
+/** "48 min", "1 h 12", or "<1 min" for a workout that ended inside the first minute. */
 export function lengthText(seconds: number): string {
+  if (seconds > 0 && seconds < 60) return "<1 min";
   const m = Math.round(seconds / 60);
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
   return `${h} h ${String(m % 60).padStart(2, "0")}`;
 }
 
-/** A weight of kilograms with its unit's word: "12,450 kg". */
-export function volumeText(kg: number): string {
-  return `${Math.round(kg).toLocaleString()} kg`;
+/** A weight of kilograms in the unit it was entered in, with that unit's word: "12,450 kg" or "27,447 lb". */
+export function volumeText(kg: number, unit: "kg" | "lb" = "kg"): string {
+  const value = unit === "lb" ? kg / 0.45359237 : kg;
+  return `${Math.round(value).toLocaleString()} ${unit}`;
 }
 
 /** The footer: "4 days ago" for the last month, then the date, with the year once it is not this one ("16 Nov 2025"). */
@@ -93,7 +95,7 @@ export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: Routin
   return (
     <>
       <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "w-full p-4")}>
-        <View className="flex-1 gap-2">
+        <View className="gap-2">
           <View className="flex-row items-start justify-between gap-1">
             <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
               {card.routine.name}
@@ -117,7 +119,7 @@ export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: Routin
           <Text className="text-[12px] leading-4 text-muted-foreground">{whenText(card.lastTs, now) || t("home.neverDone")}</Text>
         </View>
       </Press>
-      <MenuPanel anchor={anchor} onClose={closeMenu} align="stretch">
+      <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
         <MenuItem icon={Play} label={t("home.startTemplate")} onPress={() => (closeMenu(), onStart())} />
         <MenuItem icon={Pencil} label={t("routine.edit")} onPress={() => (closeMenu(), onEdit())} />
         <MenuItem icon={Trash2} label={t("routine.delete")} danger onPress={() => (closeMenu(), onDelete())} />
@@ -130,7 +132,7 @@ export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: Routin
 export function SessionRow({ card, onPress }: { card: SessionCard; onPress: () => void }) {
   const { t } = useTranslation("gym");
   const seconds = card.endTs ? card.endTs - card.startTs : 0;
-  const meta = [t("session.setsCount", { count: card.setCount }), volumeText(card.volumeKg), ...(seconds > 0 ? [lengthText(seconds)] : [])].join(" · ");
+  const meta = [t("session.setsCount", { count: card.setCount }), volumeText(card.volumeKg, card.unit), ...(seconds > 0 ? [lengthText(seconds)] : [])].join(" · ");
   return (
     <Press activeBg="bg-fill-hover" accessibilityRole="button" onPress={onPress} className="flex-row items-center gap-3 rounded-xl px-1 py-3">
       <View className="min-w-0 flex-1 gap-0.5">

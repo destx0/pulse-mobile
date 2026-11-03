@@ -961,3 +961,22 @@ and nothing else, while every hook reports focused, ready and populated.
 A `TextInput` in a fixed-height box inherits Android's font padding above the line, and the top of the glyph is clipped:
 a `0` with its top cut reads as a `U`, so "10" looked like "IU" and every set looked wrong. `paddingVertical: 0`,
 `includeFontPadding: false` and `textAlignVertical: "center"` fix it. The value was never wrong — only the clip.
+
+## A toast that waits, and a pill that slides
+
+An undo toast is a decision, so its clock is measured, not counted down: a press stores `deadline − now` in a ref and
+pauses, and the release re-arms a timeout with what is left (never below 400 ms), so a finger resting on the toast keeps
+it alive and a lifted one never watches it vanish. The hold is keyed by the toast's id rather than a boolean, because a
+new toast must not be born paused. There is no ✕ beside the action: a thumb that misses Undo lands on the card, which
+only pauses, so a miss costs nothing. A toast without an action keeps `pointerEvents="none"`, exactly as before.
+
+The segmented control's raised segment is one `Animated.View` measured from each segment's `onLayout` and moved with
+`translateX`/`translateY`; its width and height animate too, because the labels have different widths. The first
+placement happens inside `onLayout` (mutating the shared values is not a render), which keeps the first painted frame
+from being a 0 × 0 flash and avoids `setState` synchronously inside an effect — the React Compiler's
+`react-hooks/set-state-in-effect` rule rejects that. Under reduced motion every change snaps.
+
+The rest bar is driven by a 1 Hz value, so it interpolates: a `scaleX` transform with a one-second linear timing moves
+between the two numbers the clock actually knows, which reads as a continuous sweep and never relayouts the card.
+`transformOrigin: "left"` anchors it. A jump larger than two ticks (the phone slept, or ±15 was pressed) snaps instead,
+so the bar never crawls toward a number that is already wrong.

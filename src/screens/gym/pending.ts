@@ -14,7 +14,7 @@ export function onPickedExercise(listener: Listener): () => void {
 export const hasPickerListener = () => listeners.size > 0;
 
 export function pickedExercise(exercise: GymExercise): void {
-  const current = [...listeners];
-  listeners.clear();
-  for (const l of current) l(exercise);
+  // The editor is still open and waiting for the next lift too: emit to every subscriber and leave them subscribed
+  // until they unmount. Clearing here made the second "Add exercise" in one template fall through to the Gym tab.
+  for (const l of [...listeners]) l(exercise);
 }

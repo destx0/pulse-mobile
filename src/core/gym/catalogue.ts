@@ -402,9 +402,9 @@ export function exerciseName(id: string, custom: Map<string, GymExercise>): stri
 }
 
 /** Search over the catalogue plus the owner's exercises: every word must appear, so "incline dumbbell" finds the press. */
-export function searchExercises(query: string, extra: GymExercise[], limit = 40): GymExercise[] {
+export function searchExercises(query: string, extra: GymExercise[], limit = 40, source: readonly GymExercise[] = CATALOGUE): GymExercise[] {
   const words = key(query).split(" ").filter(Boolean);
-  const all = [...extra, ...CATALOGUE];
+  const all = [...extra, ...source];
   if (!words.length) return all.slice(0, limit);
   const hits: { e: GymExercise; score: number }[] = [];
   for (const e of all) {

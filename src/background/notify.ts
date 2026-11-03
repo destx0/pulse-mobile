@@ -7,10 +7,14 @@ import { i18n } from "@/i18n/config";
 import { DEEP_LINK } from "./decide";
 
 export const CHANNEL_ID = "pulse";
+/** Rest countdowns get their own channel: they are the one Pulse notification that must be heard mid-workout. */
+export const REST_CHANNEL_ID = "pulse-rest";
 /** The daily reminder's fixed identifier: scheduling again replaces it. */
 export const CHECK_IN_ID = "pulse.checkin";
 /** The bedtime reminder's, re-planned after every run (smart.ts's planBedtime). */
 export const BEDTIME_ID = "pulse.bedtime";
+/** The running rest countdown, re-planned on every start, skip or ±15. */
+export const REST_ID = "pulse.rest";
 
 let handlerInstalled = false;
 /** Shows notifications that arrive while Pulse is in the foreground too (expo-notifications drops them otherwise). */
@@ -30,6 +34,21 @@ export function ensureChannel(): Promise<void> {
       ? Notifications.setNotificationChannelAsync(CHANNEL_ID, { name: "Pulse", importance: Notifications.AndroidImportance.DEFAULT }).then(() => undefined)
       : Promise.resolve();
   return channel;
+}
+
+let restChannel: Promise<void> | null = null;
+/** The rest channel: high importance, so a countdown that ends while the phone is in a pocket is heard. */
+function ensureRestChannel(): Promise<void> {
+  restChannel ??=
+    Platform.OS === "android"
+      ? Notifications.setNotificationChannelAsync(REST_CHANNEL_ID, {
+          name: i18n.t("gym:session.restChannel"),
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: "default",
+          vibrationPattern: [0, 250, 150, 250],
+        }).then(() => undefined)
+      : Promise.resolve();
+  return restChannel;
 }
 
 export type NotificationPermission = "granted" | "denied" | "undetermined";
@@ -114,4 +133,33 @@ export async function scheduleBedtime(p: Payload & { at: number }): Promise<bool
 
 export async function cancelBedtime(): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(BEDTIME_ID).catch(() => {});
+}
+
+/**
+ * Schedules the rest countdown's end for `at` (unix seconds), replacing an earlier one. The app may be backgrounded:
+ * the system shows this, so a rest that ends in a pocket is not missed. Never throws; false when it couldn't be shown.
+ */
+export async function scheduleRest(at: number, url: string): Promise<boolean> {
+  try {
+    await ensureRestChannel();
+    await cancelRest();
+    await Notifications.scheduleNotificationAsync({
+      identifier: REST_ID,
+      content: {
+        title: i18n.t("gym:session.restDoneTitle"),
+        body: i18n.t("gym:session.restDoneBody"),
+        data: { url },
+        sound: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at * 1000, channelId: REST_CHANNEL_ID },
+    });
+    return true;
+  } catch (e) {
+    console.warn("[notify] rest", e instanceof Error ? e.message : String(e));
+    return false;
+  }
+}
+
+export async function cancelRest(): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(REST_ID).catch(() => {});
 }

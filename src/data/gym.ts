@@ -5,7 +5,18 @@ import type { GymExercise, GymMeasurement, GymRoutine, GymRoutineItem, GymSessio
 
 export type { GymExercise, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet, SetType };
 
-/** What the last Strong import wrote. One row: an import does not need a history of itself. */
-export type GymImportState = { importedAt: number; sessions: number; sets: number; firstDay: string | null; lastDay: string | null };
+/** What the last Strong import wrote. One row: an import does not need a history of itself. The ids let the import be
+ *  taken back out: every session and every template the file made. */
+export type GymImportState = {
+  importedAt: number;
+  sessions: number;
+  sets: number;
+  firstDay: string | null;
+  lastDay: string | null;
+  /** The sessions written by the import, so it can be undone. Absent on a state written before undo existed. */
+  sessionIds?: string[];
+  /** The templates the import made, deleted again by an undo. */
+  routineIds?: string[];
+};
 
 export const EMPTY_IMPORT: GymImportState = { importedAt: 0, sessions: 0, sets: 0, firstDay: null, lastDay: null };

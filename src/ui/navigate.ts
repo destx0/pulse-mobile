@@ -24,6 +24,11 @@ export function goBack() {
   else router.replace("/");
 }
 
+/** Replaces the page on top, so the screen that comes next is not stacked over a chooser. */
+export function replace(href: string) {
+  router.replace(href as Href);
+}
+
 /** A tab root ("/", "/health", "/journal", "/more"), with or without a query. */
 export const isTabRoot = (path: string) => ["/", "/health", "/journal", "/more"].includes(path.split("?")[0]);
 

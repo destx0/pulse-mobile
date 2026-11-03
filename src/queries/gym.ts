@@ -2,8 +2,8 @@
 // Every Postgres read the web app would do is a Store read here.
 import { CATALOGUE } from "@/core/gym/catalogue";
 import { estimate1Rm } from "@/core/gym/load";
-import { bestSet, groupByExercise, isRepSet, oneRmSeries, previousSets, recentExercises, recordsOf, volumeOf, type PersonalRecord } from "@/core/gym/stats";
-import type { GymExercise, GymSession, GymSet, MeasurementKind } from "@/core/gym/types";
+import { bestSet, groupByExercise, hasWork, isRepSet, isWorkSet, oneRmSeries, previousSets, recentExercises, recordsOf, setsRecord, volumeOf, type PersonalRecord } from "@/core/gym/stats";
+import type { GymExercise, GymSession, GymSet, MeasurementKind, WeightUnit } from "@/core/gym/types";
 import { MEASUREMENTS } from "@/core/gym/types";
 import type { Store } from "@/data/store";
 import type { GymImportState, GymMeasurement, GymRoutine } from "@/data/gym";
@@ -22,6 +22,13 @@ export async function exerciseMap(store: Store): Promise<Map<string, GymExercise
 /** An exercise the log references but the catalogue no longer has (a deleted custom one): shown by its id, never lost. */
 const ghost = (id: string): GymExercise => ({ id, name: id, bodyPart: "full body", equipment: "other", custom: true, hold: false, unit: "kg", note: null });
 
+/** The unit a session or an exercise page speaks: lb only when every exercise in it is entered in pounds. */
+export function unitOfSets(sets: readonly GymSet[], map: Map<string, GymExercise>): WeightUnit {
+  const ids = new Set(sets.map((s) => s.exerciseId));
+  if (!ids.size) return "kg";
+  return [...ids].every((id) => (map.get(id)?.unit ?? "kg") === "lb") ? "lb" : "kg";
+}
+
 export type SessionCard = {
   id: string;
   name: string;
@@ -31,6 +38,8 @@ export type SessionCard = {
   finished: boolean;
   setCount: number;
   volumeKg: number;
+  /** The unit the session's weights were entered in, for the volume under it. */
+  unit: WeightUnit;
   exercises: string[];
   routineId: string | null;
 };
@@ -46,7 +55,8 @@ export function cardOf(session: GymSession, sets: readonly GymSet[], map: Map<st
     finished: session.finished,
     setCount: mine.filter((s) => s.completed).length,
     volumeKg: volumeOf(mine),
-    exercises: groupByExercise(mine).map((g) => (map.get(g.exerciseId) ?? ghost(g.exerciseId)).name),
+    unit: unitOfSets(mine, map),
+    exercises: groupByExercise(mine.filter((s) => s.completed)).map((g) => (map.get(g.exerciseId) ?? ghost(g.exerciseId)).name),
     routineId: session.routineId,
   };
 }
@@ -62,7 +72,7 @@ export type GymHomeVM = {
   active: { session: GymSession; setCount: number; done: number; volumeKg: number; exercises: string[] } | null;
   routines: RoutineCard[];
   recent: SessionCard[];
-  week: { sessions: number; sets: number; volumeKg: number; seconds: number };
+  week: { sessions: number; sets: number; volumeKg: number; seconds: number; unit: WeightUnit };
   records: { exercise: GymExercise; record: PersonalRecord }[];
 };
 
@@ -80,11 +90,11 @@ export async function getGymHome(ctx: QueryCtx): Promise<GymHomeVM> {
   }
   const activeSession = sessions.find((s) => !s.finished) ?? null;
   const weekFrom = ctx.now - 7 * 86_400;
-  const weekSessions = sessions.filter((s) => s.startTs >= weekFrom && s.finished);
+  const weekSessions = sessions.filter((s) => s.startTs >= weekFrom && s.finished && hasWork(bySession.get(s.id) ?? []));
   const weekSets = weekSessions.flatMap((s) => bySession.get(s.id) ?? []);
 
   const cards: RoutineCard[] = routines.routines.map((routine) => {
-    const last = sessions.find((s) => s.routineId === routine.id && s.finished);
+    const last = sessions.find((s) => s.routineId === routine.id && s.finished && hasWork(bySession.get(s.id) ?? []));
     return {
       routine,
       items: routines.items
@@ -124,10 +134,10 @@ export async function getGymHome(ctx: QueryCtx): Promise<GymHomeVM> {
       : null,
     routines: cards,
     recent: sessions
-      .filter((s) => s.finished)
+      .filter((s) => s.finished && hasWork(bySession.get(s.id) ?? []))
       .slice(0, 5)
       .map((s) => cardOf(s, all, map)),
-    week: { sessions: weekSessions.length, sets: weekSets.filter((s) => s.completed).length, volumeKg: volumeOf(weekSets), seconds: weekSets.length ? weekSessions.reduce((n, s) => n + Math.max(0, (s.endTs ?? s.startTs) - s.startTs), 0) : 0 },
+    week: { sessions: weekSessions.length, sets: weekSets.filter((s) => isWorkSet(s)).length, volumeKg: volumeOf(weekSets), seconds: weekSets.length ? weekSessions.reduce((n, s) => n + Math.max(0, (s.endTs ?? s.startTs) - s.startTs), 0) : 0, unit: unitOfSets(weekSets, map) },
     records,
   };
 }
@@ -137,8 +147,14 @@ export type HistoryVM = { months: { month: string; cards: SessionCard[] }[]; tot
 /** Every finished session, newest first, grouped by month. */
 export async function getGymHistory(ctx: QueryCtx): Promise<HistoryVM> {
   const [map, sessions, all] = await Promise.all([exerciseMap(ctx.store), ctx.store.gymSessions(), ctx.store.gymAllSets()]);
+  const bySession = new Map<string, GymSet[]>();
+  for (const s of all) {
+    const list = bySession.get(s.sessionId);
+    if (list) list.push(s);
+    else bySession.set(s.sessionId, [s]);
+  }
   const cards = sessions
-    .filter((s) => s.finished)
+    .filter((s) => s.finished && hasWork(bySession.get(s.id) ?? []))
     .map((s) => cardOf(s, all, map));
   const months: { month: string; cards: SessionCard[] }[] = [];
   for (const card of cards) {
@@ -167,6 +183,10 @@ export type SessionVM = {
   seconds: number;
   /** Estimated 1RM records as they stand now, for the exercises in this session. */
   records: { exerciseId: string; oneRm: number; weightKg: number; reps: number }[];
+  /** The sets in this session that beat every earlier set of their exercise. */
+  prSetIds: string[];
+  /** The new records themselves, best per exercise, for the post-workout summary. */
+  newRecords: { exercise: GymExercise; oneRm: number; weightKg: number; reps: number }[];
 };
 
 /** One session with its sets grouped by exercise, each exercise carrying what happened last time. */
@@ -178,6 +198,14 @@ export async function getGymSession(ctx: QueryCtx, id: string): Promise<SessionV
   const ids = [...new Set(sets.map((s) => s.exerciseId))];
   const earlier = ids.length ? await ctx.store.gymExerciseSets(ids, session.startTs) : [];
   const records = recordsOf([...earlier, ...sets]);
+  const prSetIds = sets.filter((s) => setsRecord([...earlier, ...sets], s)).map((s) => s.id);
+  const best = new Map<string, { exercise: GymExercise; oneRm: number; weightKg: number; reps: number }>();
+  for (const s of sets) {
+    if (!prSetIds.includes(s.id) || !isRepSet(s) || s.weightKg <= 0 || s.reps <= 0) continue;
+    const oneRm = estimate1Rm(s.weightKg, s.reps);
+    const seen = best.get(s.exerciseId);
+    if (!seen || oneRm > seen.oneRm) best.set(s.exerciseId, { exercise: map.get(s.exerciseId) ?? ghost(s.exerciseId), oneRm, weightKg: s.weightKg, reps: s.reps });
+  }
   return {
     session,
     blocks: groupByExercise(sets).map((g) => {
@@ -193,6 +221,8 @@ export async function getGymSession(ctx: QueryCtx, id: string): Promise<SessionV
     volumeKg: volumeOf(sets),
     seconds: Math.max(0, (session.endTs ?? ctx.now) - session.startTs),
     records: ids.map((exerciseId) => records.get(exerciseId)).filter((r): r is PersonalRecord => !!r),
+    prSetIds,
+    newRecords: [...best.values()],
   };
 }
 
@@ -203,6 +233,7 @@ export type ExercisePageVM = {
   series: { ts: number; oneRm: number; weightKg: number; reps: number }[];
   history: { session: SessionCard; sets: GymSet[] }[];
   totalSets: number;
+  totalReps: number;
   totalVolumeKg: number;
   bestWeight: GymSet | null;
   firstDay: string | null;
@@ -234,7 +265,7 @@ export async function getGymExercise(ctx: QueryCtx, exerciseId: string): Promise
   }
   const history = [...groups.entries()]
     .map(([sessionId, list]) => ({ session: byId.get(sessionId), sets: list.sort((a, b) => a.setNo - b.setNo) }))
-    .filter((h): h is { session: GymSession; sets: GymSet[] } => !!h.session && h.session.finished)
+    .filter((h): h is { session: GymSession; sets: GymSet[] } => !!h.session && h.session.finished && hasWork(h.sets))
     .sort((a, b) => b.session.startTs - a.session.startTs)
     .slice(0, 30)
     .map((h) => ({ session: cardOf(h.session, h.sets, map), sets: h.sets }));
@@ -244,7 +275,8 @@ export async function getGymExercise(ctx: QueryCtx, exerciseId: string): Promise
     previousRecord,
     series: oneRmSeries(sets, exerciseId),
     history,
-    totalSets: sets.filter((s) => s.completed).length,
+    totalSets: sets.filter((s) => isWorkSet(s)).length,
+    totalReps: sets.filter((s) => isWorkSet(s)).reduce((n, s) => n + Math.max(0, s.reps), 0),
     totalVolumeKg: volumeOf(sets),
     bestWeight: bestSet(sets),
     firstDay: history[history.length - 1]?.session.day ?? null,
@@ -272,7 +304,7 @@ export type RecordRow = { exercise: GymExercise; record: PersonalRecord; weightK
 export async function getGymRecords(ctx: QueryCtx): Promise<{ rows: RecordRow[] }> {
   const [map, all] = await Promise.all([exerciseMap(ctx.store), ctx.store.gymAllSets()]);
   const counts = new Map<string, number>();
-  for (const s of all) if (s.completed) counts.set(s.exerciseId, (counts.get(s.exerciseId) ?? 0) + 1);
+  for (const s of all) if (isWorkSet(s)) counts.set(s.exerciseId, (counts.get(s.exerciseId) ?? 0) + 1);
   const rows: RecordRow[] = [...recordsOf(all).values()]
     .map((record) => ({
       exercise: map.get(record.exerciseId) ?? ghost(record.exerciseId),

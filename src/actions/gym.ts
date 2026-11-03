@@ -4,9 +4,10 @@
 import { BY_ID, resolveExerciseId } from "@/core/gym/catalogue";
 import { importStrongCsv, type ImportSummary } from "@/core/gym/csv";
 import { estimate1Rm } from "@/core/gym/load";
-import { groupByExercise } from "@/core/gym/stats";
+import { groupByExercise, isWorkSet, previousSets } from "@/core/gym/stats";
 import type { BodyPart, Equipment, GymExercise, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet, MeasurementKind, SetType, WeightUnit } from "@/core/gym/types";
 import { MEASUREMENTS } from "@/core/gym/types";
+import { EMPTY_IMPORT, type GymImportState } from "@/data/gym";
 import type { Store } from "@/data/store";
 import { exerciseMap } from "@/queries/gym";
 import { newId, slug } from "@/lib/ids";
@@ -67,14 +68,15 @@ export async function activeSession(store: Store): Promise<GymSession | null> {
 export type StartInput = { name?: string; routineId?: string };
 
 /**
- * Starts a session, or hands back the one already running. Started from a routine, its exercises arrive as blank sets
- * (the planned count and reps, no weight), ready to tick; started empty, it has no exercises yet.
+ * Starts a session, or hands back the one already running. Started from a routine, its exercises arrive as sets with
+ * the planned count and reps; a set whose weight was logged last time is filled with that weight, so the first tick of
+ * a familiar lift needs no typing. Started empty, it has no exercises yet.
  */
 export async function startSession(c: ActionCtx, input: StartInput = {}): Promise<GymResult<{ session: GymSession; sets: GymSet[] }>> {
   const running = await activeSession(c.store);
   if (running) return { ok: true, data: { session: running, sets: await c.store.gymSets([running.id]) } };
   const now = nowOf(c);
-  const { routines } = await c.store.gymRoutines();
+  const { routines, items } = await c.store.gymRoutines();
   const routine = input.routineId ? routines.find((r) => r.id === input.routineId) : undefined;
   const session: GymSession = {
     id: newId(),
@@ -89,34 +91,65 @@ export async function startSession(c: ActionCtx, input: StartInput = {}): Promis
     restSec: null,
   };
   await c.store.putGymSession(session);
-  const { items } = await c.store.gymRoutines();
   const planned = items.filter((i) => i.routineId === routine?.id).sort((a, b) => a.position - b.position);
+  // The last session's numbers, per exercise: the weight a set starts with, so the log opens ready to tick.
+  const exerciseIds = [...new Set(planned.map((i) => i.exerciseId))];
+  const earlier = exerciseIds.length ? await c.store.gymExerciseSets(exerciseIds, now) : [];
+  const map = await exerciseMap(c.store);
   const sets: GymSet[] = [];
   planned.forEach((item, position) => {
+    const exercise = map.get(item.exerciseId);
+    const previous = previousSets(earlier, item.exerciseId, now);
+    const work = previous ? [...previous.byNo.values()].filter(isWorkSet).sort((a, b) => b.setNo - a.setNo) : [];
+    const lastWeight = work[0]?.weightKg ?? 0;
+    const lastReps = work[0]?.reps ?? 0;
     const count = item.sets > 0 ? Math.min(20, item.sets) : 1;
     for (let n = 1; n <= count; n++) {
-      sets.push({ id: newId(), sessionId: session.id, exerciseId: item.exerciseId, position, setNo: n, weightKg: 0, reps: item.reps || 0, seconds: null, distanceM: null, rpe: null, type: "normal", supersetId: null, completed: false, ts: null, note: null });
+      const p = previous?.byNo.get(n);
+      const used = p && isWorkSet(p) ? p : null;
+      sets.push({
+        id: newId(),
+        sessionId: session.id,
+        exerciseId: item.exerciseId,
+        position,
+        setNo: n,
+        weightKg: used?.weightKg ?? lastWeight,
+        reps: item.reps || used?.reps || lastReps,
+        seconds: exercise?.hold ? 30 : null,
+        distanceM: null,
+        rpe: null,
+        type: "normal",
+        supersetId: null,
+        completed: false,
+        ts: null,
+        note: null,
+      });
     }
   });
   for (const s of sets) await c.store.putGymSet(s);
   return { ok: true, data: { session, sets } };
 }
 
-/** Adds an exercise to a session's end, with `count` blank sets at `reps`. */
+/** Adds an exercise to a session's end, with `count` sets prefilled from the last time it was trained. */
 export async function addExerciseToSession(store: Store, session: GymSession, exercise: GymExercise, opts: { count?: number; reps?: number; weightKg?: number } = {}): Promise<GymSet[]> {
   const existing = await store.gymSets([session.id]);
   const position = existing.length ? Math.max(...existing.map((s) => s.position)) + 1 : 0;
   const count = Math.max(1, Math.min(20, opts.count ?? 3));
+  const earlier = await store.gymExerciseSets([exercise.id], session.startTs);
+  const previous = previousSets(earlier, exercise.id, session.startTs);
+  const work = previous ? [...previous.byNo.values()].filter(isWorkSet).sort((a, b) => b.setNo - a.setNo) : [];
   const sets: GymSet[] = [];
   for (let n = 1; n <= count; n++) {
+    const p = previous?.byNo.get(n);
+    const used = p && isWorkSet(p) ? p : null;
     sets.push({
       id: newId(),
       sessionId: session.id,
       exerciseId: exercise.id,
       position,
       setNo: n,
-      weightKg: opts.weightKg ?? 0,
-      reps: opts.reps ?? (exercise.hold ? 0 : 10),
+      weightKg: opts.weightKg ?? used?.weightKg ?? work[0]?.weightKg ?? 0,
+      reps: opts.reps ?? (exercise.hold ? 0 : used?.reps ?? work[0]?.reps ?? 10),
       seconds: exercise.hold ? 30 : null,
       distanceM: null,
       rpe: null,
@@ -164,25 +197,51 @@ export async function deleteSet(store: Store, set: GymSet): Promise<void> {
   }
 }
 
+/** Puts a deleted set back at its old number, moving the ones after it along. The undo of `deleteSet`. */
+export async function restoreSet(store: Store, set: GymSet): Promise<void> {
+  const rest = (await store.gymSets([set.sessionId])).filter((s) => s.exerciseId === set.exerciseId && s.id !== set.id);
+  for (const s of rest.filter((s) => s.setNo >= set.setNo).sort((a, b) => b.setNo - a.setNo)) {
+    await store.putGymSet({ ...s, setNo: s.setNo + 1 });
+  }
+  await store.putGymSet(set);
+}
+
+/** Puts an exercise's deleted sets back, all at once (the undo of removing the exercise). If the exercise has been
+ *  added back in the meantime, the restored sets go after the new ones rather than landing on their numbers. */
+export async function restoreSets(store: Store, sets: GymSet[]): Promise<void> {
+  if (!sets.length) return;
+  const { sessionId, exerciseId } = sets[0];
+  const existing = (await store.gymSets([sessionId])).filter((s) => s.exerciseId === exerciseId);
+  const after = existing.length;
+  await store.putGymSets(
+    sets
+      .slice()
+      .sort((a, b) => a.setNo - b.setNo)
+      .map((s, i) => ({ ...s, setNo: after + i + 1 })),
+  );
+}
+
 /** A new blank set at the end of an exercise, copied from the last one's weight and reps. */
 export async function addSet(store: Store, sessionId: string, exerciseId: string): Promise<GymSet | null> {
   const sets = await store.gymSets([sessionId]);
   const mine = sets.filter((s) => s.exerciseId === exerciseId).sort((a, b) => a.setNo - b.setNo);
-  const last = mine[mine.length - 1];
-  if (!last) return null;
+  const tail = mine[mine.length - 1];
+  if (!tail) return null;
+  // A drop or a failure set is not the next set's plan: copy the last ordinary set, or the tail when there is none.
+  const last = [...mine].reverse().find((s) => s.type === "normal") ?? tail;
   const set: GymSet = {
     id: newId(),
     sessionId,
     exerciseId,
-    position: last.position,
-    setNo: (last.setNo ?? mine.length) + 1,
+    position: tail.position,
+    setNo: (tail.setNo ?? mine.length) + 1,
     weightKg: last.weightKg,
     reps: last.reps,
     seconds: last.seconds,
     distanceM: last.distanceM,
     rpe: null,
     type: "normal",
-    supersetId: last.supersetId,
+    supersetId: tail.supersetId,
     completed: false,
     ts: null,
     note: null,
@@ -203,7 +262,7 @@ export async function discardSession(store: Store, id: string): Promise<void> {
   await store.deleteGymSession(id);
 }
 
-export async function updateSession(store: Store, session: GymSession, patch: Partial<Pick<GymSession, "name" | "notes" | "day" | "startTs" | "endTs">>): Promise<GymSession> {
+export async function updateSession(store: Store, session: GymSession, patch: Partial<Pick<GymSession, "name" | "notes" | "day" | "startTs" | "endTs" | "routineId">>): Promise<GymSession> {
   const next = { ...session, ...patch, name: (patch.name ?? session.name).trim().slice(0, 60) || session.name };
   await store.putGymSession(next);
   return next;
@@ -220,6 +279,29 @@ export async function stopRest(store: Store, session: GymSession): Promise<GymSe
   const next = { ...session, restStartedTs: null, restSec: null };
   await store.putGymSession(next);
   return next;
+}
+
+/** Adds or takes away rest seconds while the bar runs, keeping when it started so the countdown stays true. */
+export async function adjustRest(store: Store, session: GymSession, delta: number): Promise<GymSession> {
+  if (!session.restStartedTs || !session.restSec) return session;
+  const next = { ...session, restSec: Math.max(5, Math.min(900, session.restSec + Math.round(delta))) };
+  await store.putGymSession(next);
+  return next;
+}
+
+/** Moves an exercise one slot up or down in the running workout, taking all of its sets with it. */
+export async function moveExercise(store: Store, sessionId: string, exerciseId: string, delta: -1 | 1): Promise<void> {
+  const sets = await store.gymSets([sessionId]);
+  const blocks = groupByExercise(sets);
+  const at = blocks.findIndex((b) => b.exerciseId === exerciseId);
+  const swap = blocks[at + delta];
+  if (at < 0 || !swap) return;
+  const here = blocks[at];
+  await store.putGymSets(
+    sets.map((s) =>
+      s.exerciseId === here.exerciseId ? { ...s, position: swap.position } : s.exerciseId === swap.exerciseId ? { ...s, position: here.position } : s,
+    ),
+  );
 }
 
 /**
@@ -266,6 +348,35 @@ export async function deleteRoutine(store: Store, id: string): Promise<void> {
   await store.deleteGymRoutine(id);
 }
 
+/**
+ * Turns a finished workout into a template: its working exercises, the sets each was done for, and the most common
+ * reps. The next session with that name then opens with the same shape. A name already in the templates gets a number.
+ */
+export async function saveSessionAsRoutine(store: Store, session: GymSession, now: number): Promise<GymRoutine | null> {
+  const sets = (await store.gymSets([session.id])).filter(isWorkSet);
+  if (!sets.length) return null;
+  const items = groupByExercise(sets)
+    .map((g, position) => {
+      const counts = new Map<number, number>();
+      for (const s of g.sets) counts.set(s.reps, (counts.get(s.reps) ?? 0) + 1);
+      const reps = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 10;
+      return { exerciseId: g.exerciseId, position, sets: g.sets.length, reps };
+    })
+    .filter((i) => i.exerciseId);
+  if (!items.length) return null;
+  const { routines } = await store.gymRoutines();
+  const taken = new Set(routines.map((r) => r.name.toLowerCase()));
+  const base = session.name.trim() || "Workout";
+  let name = base;
+  for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+  const res = await saveRoutine(
+    store,
+    { name, items: items.map(({ exerciseId, sets: count, reps }) => ({ exerciseId, sets: count, reps })) },
+    now,
+  );
+  return res.ok ? res.data : null;
+}
+
 // ── measurements ───────────────────────────────────────────────────────────────────────────────────────────────
 
 export async function saveMeasurement(store: Store, input: { day: string; kind: MeasurementKind; value: number }): Promise<GymResult<GymMeasurement>> {
@@ -290,6 +401,9 @@ export type ImportOutcome = ImportSummary & {
   /** Names that became the owner's own exercises. */
   custom: string[];
   routines: number;
+  /** What the import wrote, for Undo. */
+  sessionIds: string[];
+  routineIds: string[];
 };
 
 export type ImportPreview = { result: ReturnType<typeof importStrongCsv>; duplicates: number; custom: string[] };
@@ -357,7 +471,9 @@ export async function importStrong(c: ActionCtx, text: string): Promise<GymResul
   if (customRows.length) await c.store.putGymExercises(customRows);
 
   let written = 0;
+  let writtenSets = 0;
   let duplicates = 0;
+  const writtenIds: string[] = [];
   const byName = new Map<string, { session: GymSession; sets: GymSet[] }>();
   for (const parsed of sessions) {
     if (existing.has(parsed.startTs)) {
@@ -404,23 +520,27 @@ export async function importStrong(c: ActionCtx, text: string): Promise<GymResul
     });
     await c.store.putGymSets(sets);
     byName.set(session.name, { session, sets });
+    writtenIds.push(session.id);
     written++;
+    writtenSets += sets.length;
     if (written % 25 === 0) await slice();
   }
   if (!written) return fail("nothingToImport");
 
   // One template per workout name, from the last time it was done.
-  const routines = await buildRoutinesFrom(c.store, byName, now);
+  const made = await buildRoutinesFrom(c.store, byName, now);
   await c.store.putGymImport({
     importedAt: now,
     sessions: written,
-    sets: summary.sets,
+    sets: writtenSets,
     firstDay: summary.from,
     lastDay: summary.to,
+    sessionIds: writtenIds,
+    routineIds: made.ids,
   });
   return {
     ok: true,
-    data: { ...summary, sessions: written, duplicates, custom: customRows.map((e) => e.name), routines },
+    data: { ...summary, sessions: written, sets: writtenSets, duplicates, custom: customRows.map((e) => e.name), routines: made.ids.length, sessionIds: writtenIds, routineIds: made.ids },
   };
 }
 
@@ -428,14 +548,19 @@ export async function importStrong(c: ActionCtx, text: string): Promise<GymResul
  * A routine per workout name: the exercises of the most recent session with that name, each with the sets it had and
  * the most common reps. Sessions are pointed at their new routine so "last done" has something to read.
  */
-async function buildRoutinesFrom(store: Store, byName: Map<string, { session: GymSession; sets: GymSet[] }>, now: number): Promise<number> {
+async function buildRoutinesFrom(store: Store, byName: Map<string, { session: GymSession; sets: GymSet[] }>, now: number): Promise<{ count: number; ids: string[] }> {
   const { routines } = await store.gymRoutines();
-  const have = new Set(routines.map((r) => r.name.toLowerCase()));
   let made = 0;
+  const ids: string[] = [];
   const names = [...byName.keys()];
   for (const [index, name] of names.entries()) {
-    if (have.has(name.toLowerCase())) continue;
     const { session, sets } = byName.get(name)!;
+    // A template with this name already exists: the imported session belongs to it, so "last done" is not "Never done".
+    const existing = routines.find((r) => r.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      await store.putGymSession({ ...session, routineId: existing.id });
+      continue;
+    }
     const groups = groupByExercise(sets);
     const items: GymRoutineItem[] = groups
       .map((g, position) => {
@@ -449,10 +574,23 @@ async function buildRoutinesFrom(store: Store, byName: Map<string, { session: Gy
     const routine: GymRoutine = { id: newId(), name, notes: null, position: routines.length + made, updatedAt: now };
     await store.putGymRoutine(routine, items.map((i) => ({ ...i, routineId: routine.id })));
     await store.putGymSession({ ...session, routineId: routine.id });
+    ids.push(routine.id);
     made++;
     if (index % 10 === 0) await slice();
   }
-  return made;
+  return { count: made, ids };
+}
+
+/**
+ * Takes the last import back out: every session it wrote and every template it made. A session that was edited or
+ * given sets after the import goes too, because the import wrote the whole row; the confirmation says so.
+ */
+export async function undoStrongImport(store: Store, state: GymImportState): Promise<number> {
+  const sessions = state.sessionIds ?? [];
+  for (const id of sessions) await store.deleteGymSession(id);
+  for (const id of state.routineIds ?? []) await store.deleteGymRoutine(id);
+  if (sessions.length || (state.routineIds ?? []).length) await store.putGymImport(EMPTY_IMPORT);
+  return sessions.length;
 }
 
 /** The estimated 1RM of a set, for the tick's record check (re-exported so screens do not import the maths twice). */
