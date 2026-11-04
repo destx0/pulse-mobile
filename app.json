@@ -5,7 +5,7 @@
     "platforms": [
       "android"
     ],
-    "version": "0.8.4",
+    "version": "0.8.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pulse",
@@ -110,7 +110,23 @@
           "microphonePermission": false
         }
       ],
-      ["expo-localization", { "supportedLocales": { "android": ["en", "de", "fr", "es", "pt-BR", "ru", "pl", "it"] } }]
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "android": [
+              "en",
+              "de",
+              "fr",
+              "es",
+              "pt-BR",
+              "ru",
+              "pl",
+              "it"
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
