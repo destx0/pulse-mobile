@@ -110,23 +110,7 @@
           "microphonePermission": false
         }
       ],
-      [
-        "expo-localization",
-        {
-          "supportedLocales": {
-            "android": [
-              "en",
-              "de",
-              "fr",
-              "es",
-              "pt-BR",
-              "ru",
-              "pl",
-              "it"
-            ]
-          }
-        }
-      ]
+      ["expo-localization", { "supportedLocales": { "android": ["en", "de", "fr", "es", "pt-BR", "ru", "pl", "it"] } }]
     ],
     "experiments": {
       "typedRoutes": true,
