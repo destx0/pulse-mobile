@@ -97,7 +97,7 @@ export function ExerciseScreen() {
                         accessibilityRole="link"
                         activeBg="bg-fill-hover"
                         onPress={() => push(`/gym/session/${h.session.id}`)}
-                        className={`flex-row items-center gap-3 py-3 ${i > 0 ? "border-t border-border/60" : ""}`}
+                        className={`flex-row items-center gap-3 py-3 ${i > 0 ? "border-t border-border" : ""}`}
                       >
                         <View className="min-w-0 flex-1">
                           <Text className="text-[14px] font-semibold leading-5">{h.session.name}</Text>

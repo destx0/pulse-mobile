@@ -25,6 +25,8 @@ export type DetailHeaderProps = {
   align?: "center" | "start";
   titleIcon?: ReactNode;
   action?: ReactNode;
+  /** Overrides the title's type rank for a page whose own name must outrank its sections. */
+  titleClassName?: string;
   /** Replaces what Back does (a sheet page that asks first, the Journal's "Dismiss journal?"). */
   onBack?: () => void;
 };
@@ -41,7 +43,7 @@ function goBack(backHref?: string) {
  */
 export const detailRowHeight = ({ subtitle, dateTitle }: Pick<DetailHeaderProps, "subtitle" | "dateTitle">) => (subtitle && !dateTitle ? 52 : HEADER_ROW);
 
-export function DetailHeaderRow({ title, subtitle, info, backHref, dateTitle, dismiss = "back", align = "center", titleIcon, action, onBack, className, centerStyle }: DetailHeaderProps & { className?: string; centerStyle?: ComponentProps<typeof Animated.View>["style"] }) {
+export function DetailHeaderRow({ title, titleClassName, subtitle, info, backHref, dateTitle, dismiss = "back", align = "center", titleIcon, action, onBack, className, centerStyle }: DetailHeaderProps & { className?: string; centerStyle?: ComponentProps<typeof Animated.View>["style"] }) {
   const close = dismiss === "close";
   const back = (
     <Press activeBg="bg-fill-hover" accessibilityRole="button" accessibilityLabel={i18n.t(close ? "common:actions.close" : "common:actions.back")} onPress={onBack ?? (() => goBack(backHref))} className="size-11 items-center justify-center rounded-full">
@@ -56,7 +58,7 @@ export function DetailHeaderRow({ title, subtitle, info, backHref, dateTitle, di
         <View className="h-11 justify-center">{back}</View>
         {!!titleIcon && <View className="h-11 justify-center"><View className="size-7 items-center justify-center">{titleIcon}</View></View>}
         <View className="min-w-0 flex-1 pt-3">
-          <Text accessibilityRole="header" className={cn(HEADER_TITLE)} numberOfLines={1}>{title}</Text>
+          <Text accessibilityRole="header" className={cn(HEADER_TITLE, titleClassName)} numberOfLines={1}>{title}</Text>
           {!!subtitle && <Text className="text-[13px] leading-[18px] tabular-nums text-foreground-secondary" numberOfLines={1}>{subtitle}</Text>}
         </View>
         {!!right && <View className="h-11 justify-center">{right}</View>}
@@ -75,8 +77,8 @@ export function DetailHeaderRow({ title, subtitle, info, backHref, dateTitle, di
             <DateSwitcher {...dateTitle} placement="header" />
           ) : (
             <>
-              <Text accessibilityRole="header" className={cn(HEADER_TITLE, "max-w-full")} numberOfLines={1}>{title}</Text>
-              {!!subtitle && <Text className="max-w-full text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground" numberOfLines={1}>{subtitle}</Text>}
+              <Text accessibilityRole="header" className={cn(HEADER_TITLE, "max-w-full", titleClassName)} numberOfLines={1}>{title}</Text>
+              {!!subtitle && <Text className="max-w-full text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] tabular-nums text-muted-foreground" numberOfLines={1}>{subtitle}</Text>}
             </>
           )}
         </Animated.View>

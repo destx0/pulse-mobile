@@ -1,13 +1,13 @@
 // The gym screens' shared pieces: a template card, a history row, a menu item and the small formatting the log needs.
-// Pulse's own tokens and type, in Strong's layout: a two-column grid of templates, a list of sessions under it.
+// Pulse's own tokens and type, in Strong's layout: one wide column of templates, a list of sessions under it.
 import { useEffect, useState, type ReactNode } from "react";
 import { Modal, Pressable, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
-import { ChevronRight, Clock, type LucideIcon } from "lucide-react-native";
+import { ChevronRight, Clock, MoreHorizontal, type LucideIcon } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import { i18n } from "@/i18n/config";
 import { Pencil, Play, Trash2 } from "lucide-react-native";
-import { Card, CARD_CLASS } from "@/ui/Card";
+import { Card, CARD_CLASS, useCardStyle } from "@/ui/Card";
 import { MenuPanel, useMenu } from "@/ui/Menu";
 import { cn } from "@/ui/cn";
 import { Icon } from "@/ui/Icon";
@@ -82,8 +82,8 @@ export function MenuItem({ icon, label, onPress, danger }: { icon: LucideIcon; l
 export function StatTile({ label, value, aside }: { label: string; value: string; aside?: string }) {
   return (
     <View className="min-w-0 flex-1 gap-1 rounded-xl bg-secondary px-3 py-2.5">
-      <Text className="text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-muted-foreground">{label}</Text>
-      <Text className="font-numeric text-[19px] font-semibold leading-6">{value}</Text>
+      <Text className="text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{label}</Text>
+      <Text className="font-numeric text-[17px] font-semibold leading-6">{value}</Text>
       {!!aside && <Text className="text-[12px] leading-4 text-muted-foreground">{aside}</Text>}
     </View>
   );
@@ -93,33 +93,46 @@ export function StatTile({ label, value, aside }: { label: string; value: string
 export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: RoutineCard; onStart: () => void; onEdit: () => void; onDelete: () => void }) {
   const { t } = useTranslation("gym");
   const [now] = useState(() => Math.floor(Date.now() / 1000));
+  const cardStyle = useCardStyle();
   const { ref: menuRef, anchor, open: openMenu, close: closeMenu } = useMenu();
-  const summary = card.items.map((i) => (i.sets > 0 ? `${i.sets} × ${i.exercise.name}` : i.exercise.name)).join(", ");
+  const summary = (() => {
+    // Built at item granularity: the clamp then cuts between exercises, not through "5 × Standing Calf Raise (Machine)".
+    const items = card.items.map((i) => (i.sets > 0 ? `${i.sets} × ${i.exercise.name}` : i.exercise.name));
+    const shown: string[] = [];
+    let length = 0;
+    for (const item of items) {
+      if (shown.length && length + item.length > 96) return `${shown.join(", ")} …`;
+      shown.push(item);
+      length += item.length + 2;
+    }
+    return shown.join(", ");
+  })();
   return (
     <>
-      <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "w-full p-4")}>
+      <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "w-full p-4")} style={cardStyle}>
         <View className="gap-2">
-          <View className="flex-row items-start justify-between gap-1">
+          <View className="flex-row items-start justify-between gap-2">
             <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
               {card.routine.name}
             </Text>
             <View ref={menuRef} collapsable={false}>
-              <Press accessibilityRole="button" accessibilityLabel={t("menu.template")} hitSlop={12} onPress={openMenu} className="size-6 items-center justify-center">
-                <View className="flex-row gap-0.5">
-                  {[0, 1, 2].map((i) => (
-                    <View key={i} className="size-1 rounded-full bg-strain" />
-                  ))}
-                </View>
+              <Press accessibilityRole="button" accessibilityLabel={t("menu.template")} hitSlop={12} onPress={openMenu} className="-my-1 size-8 items-center justify-center">
+                <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
               </Press>
             </View>
           </View>
-          <Text className="text-[13px] leading-[18px] text-muted-foreground" numberOfLines={3}>
+          <Text className="text-[13px] leading-[18px] text-foreground-secondary" numberOfLines={3}>
             {summary}
           </Text>
         </View>
-        <View className="mt-2 flex-row items-center gap-1.5">
-          <Icon icon={Clock} size={12} tone="muted-foreground" />
-          <Text className="text-[12px] leading-4 text-muted-foreground">{whenText(card.lastTs, now) || t("home.neverDone")}</Text>
+        <View className="mt-2 flex-row items-center justify-between gap-2">
+          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+            <Icon icon={Clock} size={12} tone="muted-foreground" />
+            <Text className="text-[12px] leading-4 text-muted-foreground">{whenText(card.lastTs, now) || t("home.neverDone")}</Text>
+          </View>
+          <View className="size-9 items-center justify-center rounded-full border border-border bg-secondary">
+            <Icon icon={Play} size={16} tone="strain-text" />
+          </View>
         </View>
       </Press>
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
@@ -137,7 +150,7 @@ export function SessionRow({ card, onPress }: { card: SessionCard; onPress: () =
   const seconds = card.endTs ? card.endTs - card.startTs : 0;
   const meta = [t("session.setsCount", { count: card.setCount }), volumeText(card.volumeKg, card.unit), ...(seconds > 0 ? [lengthText(seconds)] : [])].join(" · ");
   return (
-    <Press activeBg="bg-fill-hover" accessibilityRole="button" onPress={onPress} className="flex-row items-center gap-3 rounded-xl px-1 py-3">
+    <Press activeBg="bg-fill-hover" accessibilityRole="button" onPress={onPress} className="flex-row items-center gap-3 rounded-xl py-3">
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-baseline gap-2">
           <Text className="shrink text-[15px] font-semibold leading-5" numberOfLines={1}>
@@ -145,32 +158,47 @@ export function SessionRow({ card, onPress }: { card: SessionCard; onPress: () =
           </Text>
           <Text className="shrink-0 text-[12px] leading-4 text-muted-foreground">{formatDay(card.day, DAY.monthDay)}</Text>
         </View>
-        <Text className="text-[13px] leading-[18px] text-muted-foreground" numberOfLines={1}>
+        <Text className="text-[13px] leading-[18px] text-foreground-secondary" numberOfLines={1}>
           {card.exercises.join(", ") || t("session.empty")}
         </Text>
-        <Text className="font-numeric text-[12px] leading-4 text-foreground-secondary">{meta}</Text>
+        <Text className="font-numeric text-[12px] leading-4 text-muted-foreground">{meta}</Text>
       </View>
       <Icon icon={ChevronRight} size={16} tone="muted-foreground" />
     </Press>
   );
 }
 
-/** A titled block on a gym page. */
+/** A titled block on a gym page. The header row is the kit's section rhythm (12 px under it, 36 px tall). */
 export function Block({ title, action, children, className }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <View className={cn("gap-2", className)}>
+    <View className={cn("gap-3", className)}>
       {!!(title || action) && (
-        <View className="min-h-[34px] flex-row items-center justify-between gap-3">
+        <View className="min-h-9 flex-row items-center justify-between gap-3">
           {!!title && (
             <Text accessibilityRole="header" className="shrink text-[22px] font-semibold leading-7 tracking-[-0.01em]">
               {title}
             </Text>
           )}
-          {action}
+          {!!action && <View className="shrink-0">{action}</View>}
         </View>
       )}
       {children}
     </View>
+  );
+}
+
+/**
+ * A section header's action, the same recipe as the kit's `ActionLink` (12 px bold caps, 0.1 em tracking, a 14 px
+ * chevron, a 44 px touch target) with a glyph of its own when it creates something. Written here rather than reusing
+ * `ActionLink` because that one takes an href and these are handlers.
+ */
+export function HeaderAction({ icon, label, onPress }: { icon?: LucideIcon; label: string; onPress: () => void }) {
+  return (
+    <Press activeOpacity={0.7} accessibilityRole="button" onPress={onPress} hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }} className="flex-row items-center gap-0.5">
+      {icon ? <Icon icon={icon} size={14} tone="foreground-secondary" strokeWidth={2} /> : null}
+      <Text className="text-xs font-bold uppercase leading-4 tracking-[0.1em] text-foreground-secondary">{label}</Text>
+      {icon ? null : <Icon icon={ChevronRight} size={14} tone="foreground-secondary" strokeWidth={2} />}
+    </Press>
   );
 }
 

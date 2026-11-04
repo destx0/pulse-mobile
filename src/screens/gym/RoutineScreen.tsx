@@ -154,7 +154,7 @@ function Editor({ id, isNew, initial }: { id: string; isNew: boolean; initial: R
               <Card className="px-3 py-1">
                 <CardFill />
                 {items.map((item, i) => (
-                  <View key={item.exercise.id} className={`flex-row items-center gap-1.5 py-2.5 ${i > 0 ? "border-t border-border/60" : ""}`}>
+                  <View key={item.exercise.id} className={`flex-row items-center gap-1.5 py-2.5 ${i > 0 ? "border-t border-border" : ""}`}>
                     <Text className="min-w-0 flex-1 text-[14px] font-medium leading-5" numberOfLines={1}>
                       {item.exercise.name}
                     </Text>

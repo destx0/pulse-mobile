@@ -32,7 +32,7 @@ export function HistoryScreen() {
                 <Card className="px-3 py-1">
                   <CardFill />
                   {month.cards.map((card, i) => (
-                    <View key={card.id} className={i > 0 ? "border-t border-border/60" : undefined}>
+                    <View key={card.id} className={i > 0 ? "border-t border-border" : undefined}>
                       <SessionRow card={card} onPress={() => push(`/gym/session/${card.id}`)} />
                     </View>
                   ))}

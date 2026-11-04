@@ -7,7 +7,7 @@ import { useIsFocused } from "expo-router";
 import { ChevronRight, Dumbbell, Play, Plus, Search, Trophy } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { deleteRoutine as removeRoutine, startSession } from "@/actions/gym";
-import { loadText, toUnit, trimLoad } from "@/core/gym/load";
+import { loadText, toUnit } from "@/core/gym/load";
 import type { GymHomeVM } from "@/queries/gym";
 import { getGymHome, getGymSession } from "@/queries/gym";
 import { prefetch, useScreen } from "@/screens/useScreen";
@@ -20,7 +20,7 @@ import { Text } from "@/ui/Text";
 import { PageShell } from "@/ui/shells/PageShell";
 import { push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
-import { Block, ConfirmDialog, GymEmpty, SessionRow, StatTile, TemplateCard, clockText, lengthText, useNow, volumeText } from "./parts";
+import { Block, ConfirmDialog, GymEmpty, HeaderAction, SessionRow, StatTile, TemplateCard, clockText, lengthText, useNow, volumeText } from "./parts";
 import { GymSkeleton } from "./GymSkeleton";
 import { QueryError } from "@/ui/shells/QueryError";
 
@@ -64,7 +64,7 @@ export function GymHome() {
       title={t("tab")}
       loading={!data}
       actions={
-        <Press accessibilityRole="search" accessibilityLabel={t("home.search")} onPress={() => push("/gym/exercises")} className="h-11 w-full flex-row items-center gap-2 rounded-xl bg-secondary px-3">
+        <Press accessibilityRole="button" accessibilityLabel={t("home.search")} activeBg="bg-fill-hover" onPress={() => push("/gym/exercises")} className="h-13 w-full flex-row items-center gap-2 rounded-xl bg-field px-3">
           <Icon icon={Search} size={18} tone="muted-foreground" />
           <Text className="text-[15px] text-muted-foreground">{t("home.searchHint")}</Text>
         </Press>
@@ -86,10 +86,7 @@ export function GymHome() {
             title={t("home.templates", { count: data.routines.length })}
             action={
               data.routines.length > 0 ? (
-                <Press accessibilityRole="button" onPress={() => push("/gym/routine/new")} className="flex-row items-center gap-1">
-                  <Icon icon={Plus} size={15} tone="foreground-secondary" />
-                  <Text className="text-[13px] font-semibold text-foreground-secondary">{t("home.newTemplate")}</Text>
-                </Press>
+                <HeaderAction icon={Plus} label={t("home.newTemplate")} onPress={() => push("/gym/routine/new")} />
               ) : undefined
             }
           >
@@ -118,16 +115,13 @@ export function GymHome() {
             <Block
               title={t("home.recent")}
               action={
-                <Press accessibilityRole="link" onPress={() => push("/gym/history")} className="flex-row items-center gap-0.5">
-                  <Text className="text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-foreground-secondary">{t("home.seeAll")}</Text>
-                  <Icon icon={ChevronRight} size={14} tone="foreground-secondary" />
-                </Press>
+                <HeaderAction label={t("home.seeAll")} onPress={() => push("/gym/history")} />
               }
             >
               <Card className="px-3 py-1">
                 <CardFill />
                 {data.recent.map((card, i) => (
-                  <View key={card.id} className={i > 0 ? "border-t border-border/60" : undefined}>
+                  <View key={card.id} className={i > 0 ? "border-t border-border" : undefined}>
                     <SessionRow card={card} onPress={() => openSession(card.id)} />
                   </View>
                 ))}
@@ -137,12 +131,12 @@ export function GymHome() {
 
           {data.week.sessions > 0 && (
             <Block title={t("home.week")}>
-              <View className="gap-2">
-                <View className="flex-row gap-2">
+              <View className="gap-3">
+                <View className="flex-row gap-3">
                   <StatTile label={t("home.workouts")} value={String(data.week.sessions)} />
                   <StatTile label={t("home.sets")} value={String(data.week.sets)} />
                 </View>
-                <View className="flex-row gap-2">
+                <View className="flex-row gap-3">
                   <StatTile label={t("home.volume")} value={volumeText(data.week.volumeKg, data.week.unit)} />
                   <StatTile label={t("home.time")} value={lengthText(data.week.seconds)} />
                 </View>
@@ -154,34 +148,39 @@ export function GymHome() {
             <Block
               title={t("home.records")}
               action={
-                <Press accessibilityRole="link" onPress={() => push("/gym/records")} className="flex-row items-center gap-0.5">
-                  <Text className="text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-foreground-secondary">{t("home.seeAll")}</Text>
-                  <Icon icon={ChevronRight} size={14} tone="foreground-secondary" />
-                </Press>
+                <HeaderAction label={t("home.seeAll")} onPress={() => push("/gym/records")} />
               }
             >
               <Card className="px-3 py-1">
                 <CardFill />
                 {data.records.map((r, i) => (
-                  <Press
-                    key={r.exercise.id}
-                    accessibilityRole="link"
-                    activeBg="bg-fill-hover"
-                    onPress={() => push(`/gym/exercise/${r.exercise.id}`)}
-                    className={`flex-row items-center gap-3 py-3 ${i > 0 ? "border-t border-border/60" : ""}`}
-                  >
-                    <Icon icon={Trophy} size={16} tone="muted-foreground" />
-                    <View className="min-w-0 flex-1">
-                      <Text className="text-[14px] font-semibold leading-5" numberOfLines={1}>
-                        {r.exercise.name}
-                      </Text>
-                      <Text className="font-numeric text-[12px] leading-4 text-muted-foreground">
-                        {`${loadText(r.record.weightKg, r.exercise.unit)} ${r.exercise.unit} × ${r.record.reps}`}
-                      </Text>
-                    </View>
-                    <Text className="font-numeric text-[15px] font-semibold">{`${trimLoad(Math.round(toUnit(r.record.oneRm, r.exercise.unit) * 10) / 10)} ${r.exercise.unit}`}</Text>
-                    <Icon icon={ChevronRight} size={14} tone="muted-foreground" />
-                  </Press>
+                  <View key={r.exercise.id} className={i > 0 ? "border-t border-border" : undefined}>
+                    <Press
+                      accessibilityRole="link"
+                      activeBg="bg-fill-hover"
+                      onPress={() => push(`/gym/exercise/${r.exercise.id}`)}
+                      className="flex-row items-center gap-3 rounded-xl py-3"
+                    >
+                      <Icon icon={Trophy} size={16} tone="muted-foreground" />
+                      <View className="min-w-0 flex-1">
+                        <Text className="text-[15px] font-semibold leading-5" numberOfLines={1}>
+                          {r.exercise.name}
+                        </Text>
+                        <Text className="font-numeric text-[12px] leading-4 text-muted-foreground">
+                          {`${loadText(r.record.weightKg, r.exercise.unit)} ${r.exercise.unit} × ${r.record.reps}`}
+                        </Text>
+                      </View>
+                      <View className="items-end">
+                        <Text className="text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">
+                          {t("records.oneRm")}
+                        </Text>
+                        <Text className="font-numeric text-[15px] font-medium leading-5">
+                          {`${(Math.round(toUnit(r.record.oneRm, r.exercise.unit) * 10) / 10).toFixed(1)} ${r.exercise.unit}`}
+                        </Text>
+                      </View>
+                      <Icon icon={ChevronRight} size={16} tone="muted-foreground" />
+                    </Press>
+                  </View>
                 ))}
               </Card>
             </Block>
@@ -221,15 +220,15 @@ function ResumeCard({ active, onPress }: { active: NonNullable<GymHomeVM["active
     <Press activeScale={0.98} accessibilityRole="button" onPress={onPress} className={cn(CARD_CLASS, "px-4 py-4")} style={cardStyle}>
       <CardFill />
       <View className="flex-row items-center gap-3">
-        <View className="size-10 items-center justify-center rounded-full bg-secondary">
-          <Icon icon={Play} size={18} tone="strain" />
+        <View className="size-9 items-center justify-center rounded-full bg-secondary">
+          <Icon icon={Play} size={16} tone="strain-text" />
         </View>
         <View className="min-w-0 flex-1">
-          <Text className="text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-strain">{t("home.inProgress")}</Text>
+          <Text className="text-[11px] font-bold uppercase leading-4 tracking-[0.1em] text-strain-text">{t("home.inProgress")}</Text>
           <Text className="text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
             {active.session.name}
           </Text>
-          <Text className="text-[12px] leading-4 tabular-nums text-muted-foreground">
+          <Text className="font-numeric text-[12px] leading-4 tabular-nums text-muted-foreground">
             {t("home.resumeSub", { done: active.done, total: active.setCount })} · {clockText(elapsed)}
           </Text>
         </View>

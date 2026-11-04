@@ -21,6 +21,8 @@ import { useBodyShown, useScreenReady } from "./useScreenReady";
 
 export type DetailShellProps = {
   title: string;
+  /** Overrides the title's type rank (a page whose own name must outrank its sections). */
+  titleClassName?: string;
   /** A plain line, or a component that updates on its own (a workout's clock): the page below it then never renders
    *  for a second hand. */
   subtitle?: ReactNode;
@@ -60,11 +62,11 @@ export type DetailShellProps = {
   instant?: boolean;
 };
 
-export function DetailShell({ title, subtitle, info, onBack, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction }: DetailShellProps) {
+export function DetailShell({ title, titleClassName, subtitle, info, onBack, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction }: DetailShellProps) {
   const insets = useSafeAreaInsets();
   const side = summary ?? (hero ? insight : null);
   const inHeader = dateSwitcher?.placement === "header";
-  const headerProps = { title, subtitle, info, onBack, backHref, dismiss, align, titleIcon, action, dateTitle: inHeader ? dateSwitcher : undefined };
+  const headerProps = { title, titleClassName, subtitle, info, onBack, backHref, dismiss, align, titleIcon, action, dateTitle: inHeader ? dateSwitcher : undefined };
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_ROW);
   const { scrollY, threshold, onScroll, progress } = useCollapse();
   const heroBox = useRef<View>(null);

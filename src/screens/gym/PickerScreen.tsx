@@ -130,7 +130,7 @@ export function PickerScreen() {
 function ExerciseRow({ exercise, first, onPress }: { exercise: GymExercise; first: boolean; onPress: () => void }) {
   const { t } = useTranslation("gym");
   return (
-    <Press accessibilityRole="button" activeBg="bg-fill-hover" onPress={onPress} className={`flex-row items-center gap-3 py-3 ${first ? "" : "border-t border-border/60"}`}>
+    <Press accessibilityRole="button" activeBg="bg-fill-hover" onPress={onPress} className={`flex-row items-center gap-3 py-3 ${first ? "" : "border-t border-border"}`}>
       <Icon icon={Dumbbell} size={15} tone="muted-foreground" />
       <View className="min-w-0 flex-1">
         <Text className="text-[14px] font-medium leading-5" numberOfLines={1}>

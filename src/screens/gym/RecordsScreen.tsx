@@ -38,7 +38,7 @@ export function RecordsScreen() {
                   accessibilityRole="link"
                   activeBg="bg-fill-hover"
                   onPress={() => push(`/gym/exercise/${row.exercise.id}`)}
-                  className={`flex-row items-center gap-3 py-3 ${i > 0 ? "border-t border-border/60" : ""}`}
+                  className={`flex-row items-center gap-3 py-3 ${i > 0 ? "border-t border-border" : ""}`}
                 >
                   <Icon icon={Trophy} size={16} tone="muted-foreground" />
                   <View className="min-w-0 flex-1">

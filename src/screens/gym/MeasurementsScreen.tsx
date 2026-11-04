@@ -90,7 +90,7 @@ export function MeasurementsScreen() {
               <Card className="px-3 py-1">
                 <CardFill />
                 {data.rows.slice(0, 60).map((row, i) => (
-                  <View key={row.id} className={`flex-row items-center gap-3 py-2.5 ${i > 0 ? "border-t border-border/60" : ""}`}>
+                  <View key={row.id} className={`flex-row items-center gap-3 py-2.5 ${i > 0 ? "border-t border-border" : ""}`}>
                     <View className="min-w-0 flex-1">
                       <Text className="text-[14px] font-medium leading-5">{t(`measure.${row.kind}`)}</Text>
                       <Text className="text-[11px] leading-4 text-muted-foreground">{formatDay(row.day, DAY.monthDay)}</Text>

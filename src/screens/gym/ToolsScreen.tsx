@@ -90,7 +90,7 @@ export function ToolsScreen() {
                 <Text className="text-[13px] text-muted-foreground">{unit}</Text>
               </View>
               {oneRm > 0 && (
-                <View className="gap-1 border-t border-border/60 pt-2">
+                <View className="gap-1 border-t border-border pt-2">
                   {RM_PERCENTS.map((p) => (
                     <View key={p} className="flex-row items-center justify-between py-1">
                       <Text className="font-numeric text-[13px] text-foreground-secondary">{t("tools.percent", { percent: p })}</Text>
@@ -127,7 +127,7 @@ export function ToolsScreen() {
                   ))}
                 </View>
               </View>
-              <View className="gap-1 border-t border-border/60 pt-2">
+              <View className="gap-1 border-t border-border pt-2">
                 <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{t("tools.perSide")}</Text>
                 {n(target) <= 0 ? (
                   <Text className="text-[15px] text-muted-foreground">{MISSING}</Text>

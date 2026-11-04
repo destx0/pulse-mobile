@@ -60,6 +60,7 @@
     "done": "Done",
     "previous": "Previous",
     "usePrevious": "Use the previous numbers",
+    "allSets": "All sets",
     "lastDone": "Last done {{when}}",
     "set": "Set",
     "setDetails": "Set {{number}}",

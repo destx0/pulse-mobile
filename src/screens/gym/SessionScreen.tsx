@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useLocalSearchParams, useIsFocused } from "expo-router";
-import { ArrowDown, ArrowUp, Check, Clock, Copy, Dumbbell, History, MoreHorizontal, NotebookPen, Plus, Scale, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Check, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
 import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, stopRest, updateSession } from "@/actions/gym";
@@ -33,7 +33,7 @@ import { toast } from "@/ui/Toast";
 import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
 import { useTheme } from "@/ui/theme";
-import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText, whenText } from "./parts";
+import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText } from "./parts";
 import { QueryError } from "@/ui/shells/QueryError";
 
 export function SessionScreen() {
@@ -136,6 +136,16 @@ export function SessionScreen() {
         }
         dataChanged("gym");
         return on;
+      })(),
+    );
+  /** Tick or untick every set of one exercise, through the same write a row's own tick uses. */
+  const tickBlock = (block: Block, on: boolean) =>
+    track(
+      (async () => {
+        for (const set of block.sets) {
+          if (isDone(set) === on) continue;
+          await tick(set, { weightKg: set.weightKg, reps: set.reps, seconds: set.seconds, distanceM: set.distanceM }, on);
+        }
       })(),
     );
   const linkSuperset = (block: Block, next: Block | null, on: boolean) =>
@@ -243,6 +253,7 @@ export function SessionScreen() {
 
   const empty = !vm.blocks.some((b) => b.sets.some((s) => isDone(s) && s.type !== "warmup"));
   const pending = vm.blocks.reduce((n, b) => n + b.sets.filter((s) => !isDone(s)).length, 0);
+  const totalSets = vm.blocks.reduce((n, b) => n + b.sets.length, 0);
   const unit = vm.blocks.length && vm.blocks.every((b) => b.exercise.unit === "lb") ? "lb" : "kg";
 
   return (
@@ -250,10 +261,11 @@ export function SessionScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <DetailShell
           title={session.name}
+          titleClassName="text-[22px] font-semibold normal-case tracking-[-0.01em]"
           subtitle={
             <>
               <SessionClock startTs={session.startTs} endTs={session.endTs} />
-              {` · ${t("session.setsCount", { count: vm.setCount })}`}
+              {` · ${`${vm.setCount} / ${totalSets}`} ${t("session.sets")}`}
             </>
           }
           floatingAction={false}
@@ -261,7 +273,7 @@ export function SessionScreen() {
           instant
           backHref="/gym"
           action={
-            <View className="flex-row items-center gap-1">
+            <View className="flex-row items-center gap-2">
               {!session.finished && (
                 <Press
                   accessibilityRole="button"
@@ -269,26 +281,28 @@ export function SessionScreen() {
                     setConfirmAt(nowS());
                     setConfirm("finish");
                   }}
-                  className="h-9 items-center justify-center rounded-full bg-primary px-3.5"
+                  className="h-11 items-center justify-center px-2"
                 >
-                  <Text className="text-[12px] font-bold uppercase tracking-[0.08em] text-primary-foreground">{t("session.finish")}</Text>
+                  <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-strain-deep dark:text-strain-text">{t("session.finish")}</Text>
                 </Press>
               )}
               <View ref={menuRef} collapsable={false}>
-                <Press accessibilityRole="button" onPress={openMenu} className="size-9 items-center justify-center rounded-full">
-                  <Icon icon={MoreHorizontal} size={20} tone="foreground" />
+                <Press accessibilityRole="button" onPress={openMenu} className="size-11 items-center justify-center">
+                  <Icon icon={MoreHorizontal} size={20} tone="muted-foreground" />
                 </Press>
               </View>
             </View>
           }
           footer={
             <View className="gap-3 pb-8">
-              <Button variant="secondary" onPress={addExercise}>
-                <View className="flex-row items-center gap-2">
-                  <Icon icon={Plus} size={16} tone="foreground" />
-                  <Text className="text-[13px] font-bold uppercase tracking-[0.1em]">{t("session.addExercise")}</Text>
-                </View>
-              </Button>
+              <Press
+                accessibilityRole="button"
+                accessibilityLabel={t("session.addExercise")}
+                onPress={addExercise}
+                className="h-12 flex-row items-center justify-center gap-2"
+              >
+                <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-foreground-secondary">{t("session.addExercise")}</Text>
+              </Press>
               {session.finished && !!session.endTs && <Text className="text-center text-[12px] text-muted-foreground">{lengthText(session.endTs - session.startTs)}</Text>}
             </View>
           }
@@ -299,7 +313,7 @@ export function SessionScreen() {
                   <CardFill />
                   <View className="flex-row items-center gap-2">
                     <Icon icon={Check} size={16} tone="strain" strokeWidth={2.6} />
-                    <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain">{t("session.complete")}</Text>
+                    <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain-text">{t("session.complete")}</Text>
                   </View>
                   <View className="flex-row gap-2">
                     <StatTile label={t("session.duration")} value={lengthText(lived)} />
@@ -338,6 +352,9 @@ export function SessionScreen() {
                     onRemoveExercise={removeExercise}
                     onAddSet={addOne}
                     onMove={move}
+                    onTickBlock={tickBlock}
+                    allDone={block.sets.every((s) => isDone(s))}
+                    someDone={block.sets.some((s) => isDone(s))}
                     canUp={index > 0}
                     canDown={index < vm.blocks.length - 1}
                     prSetIds={vm.prSetIds}
@@ -366,9 +383,9 @@ export function SessionScreen() {
         />
 
         <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
-          <MenuItem icon={Dumbbell} label={t("session.rename")} onPress={() => (closeMenu(), setRename(true))} />
+          <MenuItem icon={Pencil} label={t("session.rename")} onPress={() => (closeMenu(), setRename(true))} />
           <MenuItem icon={NotebookPen} label={t("session.notes")} onPress={() => (closeMenu(), setNotesOpen(true))} />
-          <MenuItem icon={History} label={t("session.addExercise")} onPress={() => (closeMenu(), addExercise())} />
+          <MenuItem icon={Plus} label={t("session.addExercise")} onPress={() => (closeMenu(), addExercise())} />
           {!session.finished && <MenuItem icon={Trash2} label={t("session.discard")} danger onPress={() => (closeMenu(), setConfirm("discard"))} />}
           {session.finished && <MenuItem icon={Trash2} label={t("session.delete")} danger onPress={() => (closeMenu(), setConfirm("delete"))} />}
         </MenuPanel>
@@ -469,6 +486,9 @@ function BlockCard({
   onRemoveExercise,
   onAddSet,
   onMove,
+  onTickBlock,
+  allDone,
+  someDone,
   canUp,
   canDown,
   prSetIds,
@@ -484,6 +504,10 @@ function BlockCard({
   onRemoveExercise: (block: Block) => void;
   onAddSet: (block: Block) => void;
   onMove: (block: Block, delta: -1 | 1) => void;
+  /** Tick or untick every set of the exercise at once. */
+  onTickBlock: (block: Block, on: boolean) => void;
+  allDone: boolean;
+  someDone: boolean;
   canUp: boolean;
   canDown: boolean;
   prSetIds: string[];
@@ -498,45 +522,61 @@ function BlockCard({
   const supersetId = block.sets.find((s) => s.supersetId)?.supersetId ?? null;
   const cardio = exercise.bodyPart === "cardio";
   const hold = exercise.hold || block.sets.some((s) => !!s.seconds && !s.reps);
-  const [now] = useState(() => Math.floor(Date.now() / 1000));
   // Strong's "+0%" against the last time this exercise was done. An unchanged volume shows nothing: "− 0" is noise,
   // and the absence is the honest reading (OpenGym's rule for a weight that has not moved).
+  // Only once every set of the exercise is ticked: a workout in progress would otherwise compare one set's volume
+  // against the whole of last time's and show a red "−80%" for the first three sets.
   const lastVolume = block.prev.reduce((n, s) => n + (s && s.type !== "warmup" ? s.weightKg * s.reps : 0), 0);
   const nowVolume = block.sets.reduce((n, s) => n + (s.completed && s.type !== "warmup" ? s.weightKg * s.reps : 0), 0);
-  const delta = lastVolume > 0 && nowVolume > 0 ? Math.round(((nowVolume - lastVolume) / lastVolume) * 100) : null;
+  const workSets = block.sets.filter((s) => s.type !== "warmup");
+  const allTicked = workSets.length > 0 && workSets.every((s) => s.completed);
+  const delta = allTicked && lastVolume > 0 && nowVolume > 0 ? Math.round(((nowVolume - lastVolume) / lastVolume) * 100) : null;
 
   return (
     <Card className="px-3 py-4">
       <CardFill />
       <View className="mb-3 flex-row items-center gap-2 px-1">
         <Press accessibilityRole="link" onPress={() => push(`/gym/exercise/${exercise.id}`)} className="min-w-0 flex-1 flex-row items-center gap-1.5">
-          <Text className="shrink text-[15px] font-semibold leading-5" numberOfLines={1}>
+          <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
             {exercise.name}
           </Text>
-          <Icon icon={Scale} size={12} tone="muted-foreground" />
         </Press>
         {!!supersetId && (
           <View className="h-5 items-center justify-center rounded-full bg-secondary px-2">
             <Text className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground">{t("session.superset")}</Text>
           </View>
         )}
-        {delta != null && delta !== 0 && <Text className={cn("font-numeric text-[12px] font-semibold tabular-nums", delta > 0 ? "text-strain" : "text-recovery-red-text")}>{`${delta > 0 ? "+" : ""}${delta}%`}</Text>}
+        {delta != null && delta !== 0 && <Text className={cn("font-numeric text-[12px] font-semibold tabular-nums", delta > 0 ? "text-strain-text" : "text-recovery-red-text")}>{`${delta > 0 ? "+" : ""}${delta}%`}</Text>}
         <View ref={menuRef} collapsable={false}>
-          <Press accessibilityRole="button" accessibilityLabel={t("session.exerciseMenu")} hitSlop={10} onPress={openMenu} className="size-7 items-center justify-center">
-            <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
+          <Press accessibilityRole="button" accessibilityLabel={t("session.exerciseMenu")} onPress={openMenu} className="size-11 items-center justify-center">
+            <Icon icon={MoreHorizontal} size={20} tone="muted-foreground" />
           </Press>
         </View>
       </View>
 
-      <View className="mb-1 flex-row items-center gap-2 px-1">
-        <Text className="w-8 text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.set")}</Text>
-        <Text className="min-w-0 flex-1 text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.previous")}</Text>
-        {!hold && <Text className="w-[62px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{unit === "lb" ? t("session.lb") : t("session.kg")}</Text>}
-        {hold && <Text className="w-[62px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.sec")}</Text>}
-        {cardio && <Text className="w-[54px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.km")}</Text>}
-        {cardio && <Text className="w-[54px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.min")}</Text>}
-        {!hold && !cardio && <Text className="w-[54px] text-center text-[10px] font-semibold uppercase leading-4 tracking-[0.06em] text-muted-foreground">{t("session.reps")}</Text>}
-        <View className="size-8" />
+      <View className="mb-2 flex-row items-center gap-3 px-1">
+        <Text className="w-8 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.set")}</Text>
+        <Text className="w-[74px] text-right text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.previous")}</Text>
+        <View className="flex-1 flex-row items-center gap-2">
+          {hold && <View className="flex-1" />}
+          <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.km") : hold ? t("session.sec") : unit === "lb" ? t("session.lb") : t("session.kg")}</Text>
+          {!hold && <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.min") : t("session.reps")}</Text>}
+        </View>
+        <Press
+          accessibilityRole="button"
+          accessibilityState={{ checked: allDone }}
+          accessibilityLabel={t("session.allSets")}
+          onPress={() => onTickBlock(block, !allDone)}
+          className="h-11 w-11 items-center justify-center"
+        >
+          <View className={cn("size-6 items-center justify-center rounded-full", allDone ? "bg-secondary" : "border border-muted-foreground")}>
+            {allDone ? (
+              <Icon icon={Check} size={13} tone="strain-text" strokeWidth={2.6} />
+            ) : someDone ? (
+              <View className="h-0.5 w-3 rounded-full bg-muted-foreground" />
+            ) : null}
+          </View>
+        </Press>
       </View>
 
       <View>
@@ -553,26 +593,12 @@ function BlockCard({
             onSave={(d, completed) => onSave(set, d, completed)}
             onTick={(d, on) => onTick(set, d, on)}
             onMenu={() => setNoting(set)}
-            onCopyPrev={(completed) => {
-              const p = block.prev[i];
-              if (!p) return;
-              onSave(
-                set,
-                {
-                  weightKg: p.weightKg,
-                  reps: p.reps,
-                  seconds: p.seconds,
-                  distanceM: p.distanceM,
-                },
-                completed,
-              );
-            }}
           />
         ))}
       </View>
 
-      <Press accessibilityRole="button" onPress={() => onAddSet(block)} className="mt-2 h-10 items-center justify-center">
-        <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-strain">{t("session.addSet")}</Text>
+      <Press accessibilityRole="button" onPress={() => onAddSet(block)} className="mt-1 h-11 items-center justify-center">
+        <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-foreground-secondary">{t("session.addSet")}</Text>
       </Press>
 
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
@@ -628,7 +654,6 @@ function BlockCard({
             ))}
         </View>
       )}
-      {!!block.prev[0]?.ts && <Text className="mt-1 px-1 text-[11px] text-muted-foreground">{t("session.lastDone", { when: whenText(block.prev[0].ts, now) })}</Text>}
     </Card>
   );
 }
@@ -645,7 +670,6 @@ function SetRow({
   onSave,
   onTick,
   onMenu,
-  onCopyPrev,
 }: {
   set: GymSet;
   prev: GymSet | null;
@@ -657,7 +681,6 @@ function SetRow({
   onSave: (d: Draft, completed: boolean) => void;
   onTick: (d: Draft, on: boolean) => Promise<boolean>;
   onMenu: () => void;
-  onCopyPrev: (completed: boolean) => void;
 }) {
   const { t } = useTranslation("gym");
   const reduce = useReducedMotion();
@@ -743,45 +766,43 @@ function SetRow({
     : "—";
 
   return (
-    <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-2 rounded-lg px-1 py-1">
+    <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-3 rounded-lg px-1 py-1">
       <Animated.View pointerEvents="none" className="absolute inset-0 rounded-lg bg-strain" style={glowStyle} />
       <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center" accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`}>
-        <Text className={cn("font-numeric text-[13px]", done ? "text-foreground" : "text-muted-foreground")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
+        <Text className="font-numeric text-[13px] font-semibold text-foreground-secondary">{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
-      <Press
-        accessibilityRole="button"
-        accessibilityLabel={t("session.usePrevious")}
-        onPress={prev ? () => onCopyPrev(done) : undefined}
-        className="min-w-0 flex-1 flex-row items-center gap-1"
-      >
-        {pr && <Text className="text-[10px] font-bold uppercase tracking-[0.04em] text-strain">{t("session.record")}</Text>}
-        <Text className="shrink font-numeric text-[12px] leading-4 text-muted-foreground" numberOfLines={1}>
+      <View className="w-[74px] flex-row items-center justify-end gap-1">
+        {pr && <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain-text">{t("session.record")}</Text>}
+        <Text className="shrink font-numeric text-[13px] leading-4 text-muted-foreground" numberOfLines={1}>
           {prevText}
         </Text>
-        {!!prev && <Icon icon={Copy} size={11} tone="muted-foreground" />}
-      </Press>
-      {!hold && (
-        <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="w-[62px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
-      )}
-      {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="w-[62px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
-      {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
-      {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
-      {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="w-[54px]" dim={done} label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
+      </View>
+      <View className="flex-1 flex-row items-center gap-2">
+        {hold && <View className="flex-1" />}
+        {!hold && (
+          <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
+        )}
+        {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
+        {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
+        {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
+        {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
+      </View>
       <Press
         accessibilityRole="checkbox"
         accessibilityState={{ checked: done }}
         onPress={() => void toggle()}
-        hitSlop={6}
-        className={cn("size-8 items-center justify-center rounded-full", done ? "bg-primary" : "border border-input")}
+        className="h-11 w-11 items-center justify-center"
       >
-        {done && <Icon icon={Check} size={16} tone="primary-foreground" strokeWidth={2.6} />}
+        <View className={cn("size-8 items-center justify-center rounded-full border", done ? "border-muted-foreground bg-secondary" : "border-muted-foreground")}>
+          {done && <Icon icon={Check} size={13} tone="strain-text" strokeWidth={2.6} />}
+        </View>
       </Press>
     </Press>
   );
 }
 
 /** The number cell: a filled rounded box, the way Strong draws a set's weight. */
-function NumCell({ value, onChangeText, onEnd, className, dim, label }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; dim?: boolean; label: string }) {
+function NumCell({ value, onChangeText, onEnd, className, label }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; label: string }) {
   const { c } = useTheme();
   return (
     <TextInput
@@ -795,7 +816,7 @@ function NumCell({ value, onChangeText, onEnd, className, dim, label }: { value:
       placeholder="0"
       accessibilityLabel={label}
       placeholderTextColor={c["muted-foreground"]}
-      className={cn("h-9 rounded-lg bg-secondary text-center font-numeric text-[15px] font-semibold text-foreground", dim && "text-muted-foreground", className)}
+      className={cn("h-11 rounded-lg bg-secondary text-center font-numeric text-[19px] font-semibold text-foreground", className)}
       // Android gives a TextInput font padding above the line, which a 36 px box then clips: a 0 lost its top and read
       // as a U ("10" as "IU"). No padding, no extra font padding, and the glyph sits centred.
       style={{ paddingVertical: 0, includeFontPadding: false, textAlignVertical: "center", fontFamily: FACES.numeric.semibold, fontVariant: ["tabular-nums"] }}

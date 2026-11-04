@@ -114,7 +114,7 @@ export async function startSession(c: ActionCtx, input: StartInput = {}): Promis
         position,
         setNo: n,
         weightKg: used?.weightKg ?? lastWeight,
-        reps: item.reps || used?.reps || lastReps,
+        reps: used && used.reps > 0 ? used.reps : item.reps || lastReps,
         seconds: exercise?.hold ? 30 : null,
         distanceM: null,
         rpe: null,
