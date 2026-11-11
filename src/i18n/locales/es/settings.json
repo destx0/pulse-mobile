@@ -35,6 +35,8 @@
     "updates": "Actualizaciones",
     "checkForUpdates": "Buscar actualizaciones",
     "checkForUpdatesHint": "Una vez al día Pulse consulta en GitHub si hay una versión nueva. No se envía nada sobre ti.",
+    "autoUpdates": "Instalar actualizaciones automáticamente",
+    "autoUpdatesHint": "Cuando hay una versión más reciente, Pulse la descarga y abre el instalador. Android te sigue pidiendo confirmación.",
     "version": "Pulse {{version}}",
     "isOut": "{{version}} ya está disponible",
     "checking": "Buscando…",

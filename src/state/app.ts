@@ -527,7 +527,7 @@ const PREFERENCES = [
   "pulse.lefu.athlete", "pulse.lefu.device",
   "pulse.notifications.markers", "pulse.notify.recovery", "pulse.notify.syncProblem",
   "pulse.nutrition.targets", "pulse.opening.seen",
-  "pulse.update", "pulse.update.check",
+  "pulse.update", "pulse.update.check", "pulse.update.auto",
   "pulse.weeklyPlan",
   "pulse.workout.haptics", "pulse.workout.log",
 ];

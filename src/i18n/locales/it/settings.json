@@ -35,6 +35,8 @@
     "updates": "Aggiornamenti",
     "checkForUpdates": "Cerca aggiornamenti",
     "checkForUpdatesHint": "Una volta al giorno Pulse chiede a GitHub se è uscita una versione più recente. Non viene inviato nulla su di te.",
+    "autoUpdates": "Installa automaticamente gli aggiornamenti",
+    "autoUpdatesHint": "Quando c’è una versione più recente, Pulse la scarica e apre il programma di installazione. Android chiede comunque conferma.",
     "version": "Pulse {{version}}",
     "isOut": "{{version}} è disponibile",
     "checking": "Controllo…",

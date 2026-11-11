@@ -20,21 +20,27 @@ const TIMEOUT_MS = 15_000;
 const CACHE_KEY = "pulse.update";
 /** "off" when the person turned the check off. */
 const CHECK_KEY = "pulse.update.check";
+/** "on" when a newer release should download and open the installer on its own. */
+const AUTO_KEY = "pulse.update.auto";
 /** Android's FLAG_GRANT_READ_URI_PERMISSION: the installer may read the APK through Pulse's file provider. */
 const GRANT_READ_URI = 1;
 
 export type UpdateState = {
   /** Whether Pulse checks for updates. */
   enabled: boolean;
+  /** Whether a newer release downloads and opens the installer without a tap on Update. */
+  auto: boolean;
   /** A newer release with an APK for this phone, unless put off with "Later" in this session; null when there is none. */
   available: (Release & { apk: string }) | null;
   /** The download, while it runs: 0 to 1. */
   progress: number | null;
 };
 
-let state: UpdateState = { enabled: true, available: null, progress: null };
+let state: UpdateState = { enabled: true, auto: false, available: null, progress: null };
 /** "Later" lasts until the app is next started: there is no skipping a version. */
 let later = false;
+/** The version auto-install has already opened the installer for in this launch: a cancelled install is not reopened on every foreground. */
+let autoTried: string | null = null;
 const listeners = new Set<() => void>();
 const patch = (p: Partial<UpdateState>) => {
   state = { ...state, ...p };
@@ -73,19 +79,44 @@ async function fetchLatest(): Promise<Release | null> {
 export async function checkForUpdate(force = false): Promise<void> {
   // Check now asks again in earnest, so an update put off with Later shows.
   if (force) later = false;
-  const enabled = (await AsyncStorage.getItem(CHECK_KEY).catch(() => null)) !== "off";
-  patch({ enabled });
+  const [check, automatic] = await Promise.all([AsyncStorage.getItem(CHECK_KEY).catch(() => null), AsyncStorage.getItem(AUTO_KEY).catch(() => null)]);
+  const enabled = check !== "off";
+  const auto = automatic === "on";
+  patch({ enabled, auto });
   if (!enabled) return patch({ available: null });
   const cached = JSON.parse((await AsyncStorage.getItem(CACHE_KEY).catch(() => null)) ?? "null") as { checkedAt: number; release: Release | null } | null;
-  if (!force && cached && Date.now() - cached.checkedAt < CHECK_EVERY_MS) return patch({ available: noticeFor(cached.release) });
+  if (!force && cached && Date.now() - cached.checkedAt < CHECK_EVERY_MS) {
+    patch({ available: noticeFor(cached.release) });
+    return autoInstall();
+  }
   const release = await fetchLatest();
   if (release) await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ checkedAt: Date.now(), release })).catch(() => {});
   patch({ available: noticeFor(release ?? cached?.release ?? null) });
+  autoInstall();
 }
 
 export async function setUpdateCheck(on: boolean): Promise<void> {
   await AsyncStorage.setItem(CHECK_KEY, on ? "on" : "off");
   await checkForUpdate(on);
+}
+
+/** Turns auto-install on or off. Turning it on checks now, so a release already found opens the installer at once. */
+export async function setUpdateAuto(on: boolean): Promise<void> {
+  await AsyncStorage.setItem(AUTO_KEY, on ? "on" : "off");
+  patch({ auto: on });
+  if (!on) return;
+  autoTried = null;
+  await checkForUpdate();
+}
+
+/** Auto-install opens Android's installer once per version a launch; the system still asks the person to confirm. */
+function autoInstall(): void {
+  const u = state.available;
+  if (!state.auto || !u || state.progress !== null || autoTried === u.version) return;
+  autoTried = u.version;
+  void installUpdate().catch(() => {
+    autoTried = null;
+  });
 }
 
 /** "Later": hides the notice until the app is next started. */

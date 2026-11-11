@@ -50,11 +50,13 @@ helper. Any single APK can be added later the same way.
 
 Once a day, as the app opens or comes back to the front, Pulse asks GitHub's latest-release endpoint
 (`src/state/update.ts`). It is the one request Pulse makes on its own, and it carries nothing about the person;
-Settings › App › Updates turns it off and has Check now. When the release is newer than the installed version and has
-an APK for the phone's CPU (`src/lib/release.ts` reads the assets this page's script uploads), every tab root shows an
-Update available card. Update downloads that APK into the app's cache and opens Android's installer on it; the person
-confirms there, and the first time Android asks them to let Pulse install apps (`REQUEST_INSTALL_PACKAGES`). Later
-hides the card until the app is next started; there is no skipping a version.
+Settings › App › Updates turns it off and has Check now. Install updates automatically downloads a new release and opens
+the installer without a tap on Update (Android still asks the person to confirm); it opens once per version each launch.
+When the release is newer than the installed version and has an APK for the phone's CPU (`src/lib/release.ts` reads the
+assets this page's script uploads), every tab root shows an Update available card. Update downloads that APK into the
+app's cache and opens Android's installer on it; the person confirms there, and the first time Android asks them to let
+Pulse install apps (`REQUEST_INSTALL_PACKAGES`). Later hides the card until the app is next started; there is no skipping
+a version.
 
 So a release needs nothing more than the steps above: the tag `v<version>` and the assets `pulse-mobile-<version>-<abi>.apk`.
 An update installs over the old app only when it is signed with the same key, so every release is built with the same

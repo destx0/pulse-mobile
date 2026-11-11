@@ -15,7 +15,7 @@ import { rememberTheme, setDisplay, setLanguage, useApp } from "@/state/app";
 import { LinkList } from "@/ui/shells/LinkList";
 import { SectionShell } from "@/ui/shells/SectionShell";
 import { APP_VERSION } from "@/queries/settings";
-import { checkForUpdate, getUpdate, setUpdateCheck, useUpdate } from "@/state/update";
+import { checkForUpdate, getUpdate, setUpdateAuto, setUpdateCheck, useUpdate } from "@/state/update";
 import { cn } from "@/ui/cn";
 import { Text } from "@/ui/Text";
 import { toast } from "@/ui/Toast";
@@ -98,7 +98,7 @@ function DisplayRows({ initialTheme }: { initialTheme: Theme }) {
  */
 function Updates() {
   const { t } = useTranslation("settings");
-  const { enabled, available } = useUpdate();
+  const { enabled, auto, available } = useUpdate();
   const [checking, setChecking] = useState(false);
   const checkNow = async () => {
     setChecking(true);
@@ -109,6 +109,7 @@ function Updates() {
   return (
     <SectionShell variant="card" title={t("app.updates")}>
       <SwitchRow rule={false} label={t("app.checkForUpdates")} hint={t("app.checkForUpdatesHint")} value={enabled} onChange={(on) => void setUpdateCheck(on)} />
+      <SwitchRow rule label={t("app.autoUpdates")} hint={t("app.autoUpdatesHint")} value={auto} onChange={(on) => void setUpdateAuto(on)} disabled={!enabled} />
       <View className={cn(ROW, ROW_RULE)}>
         <Text className={ROW_LABEL}>{t("app.version", { version: APP_VERSION })}</Text>
         {available ? <Text className={ROW_VALUE}>{t("app.isOut", { version: available.version })}</Text> : <SmallButton label={checking ? t("app.checking") : t("app.checkNow")} onPress={() => void checkNow()} />}
