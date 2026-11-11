@@ -75,9 +75,12 @@ describe("other URL state", () => {
     expect(tabForPath("/reports/2026-W39")).toBe("more");
     expect(tabForPath("/trends")).toBe("more");
     expect(tabForPath("/health/monitor")).toBe("health");
-    expect(tabForPath("/journal/insights")).toBe("journal");
+    expect(tabForPath("/habits/abc")).toBe("habits");
+    expect(tabForPath("/journal/insights")).toBe("more");
+    expect(tabForPath("/gym/history")).toBe("gym");
     expect(tabForPath("/settings")).toBe("more");
     expect(parentHref("/health/stress")).toBe("/health");
+    expect(parentHref("/habits/abc")).toBe("/habits");
     expect(parentHref("/recovery")).toBe("/");
   });
   it("weeks run Monday to Sunday", () => {

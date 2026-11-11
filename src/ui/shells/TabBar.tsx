@@ -3,7 +3,7 @@ import { useEffect, useState, type ComponentProps } from "react";
 import { View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import type { Tabs } from "expo-router";
-import { Dumbbell, HeartPulse, Menu, type LucideIcon } from "lucide-react-native";
+import { CircleCheckBig, Dumbbell, HeartPulse, Menu, type LucideIcon } from "lucide-react-native";
 import { alpha } from "../color";
 import { Glass } from "../Glass";
 import { haptic } from "../haptics";
@@ -12,7 +12,6 @@ import { HomeChart } from "../icons";
 import { Icon } from "../Icon";
 import { Text } from "../Text";
 import { useTheme } from "../theme";
-import { CheckInAction } from "./CheckInAction";
 import { TAB_BAR_HEIGHT, useTabBarBottom } from "./layout";
 import { Press } from "../Press";
 import { DURATION } from "../motion";
@@ -23,13 +22,14 @@ const LENS_RADIUS = GLASS_RADIUS - 4;
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>["tabBar"]>>[0];
 
-// The tabs: Home, Health, Gym, More. Gym took Journal's place; the journal is still a route, reachable from More and
-// from the check-in action. The route file of each is app/(tabs)/<route>.tsx.
-type TabLabel = { ns: "ui"; labelKey: "tabs.home" | "tabs.health" | "tabs.more" } | { ns: "gym"; labelKey: "tab" };
+// The tabs: Home, Health, Habits, Gym, More. Habits took the Journal's place; the journal is retired. The route file of
+// each is app/(tabs)/<route>.tsx.
+type TabLabel = { ns: "ui"; labelKey: "tabs.home" | "tabs.health" | "tabs.more" } | { ns: "gym"; labelKey: "tab" } | { ns: "habits"; labelKey: "tab" };
 
 export const TABS: ({ route: string; icon: LucideIcon } & TabLabel)[] = [
   { route: "index", ns: "ui", labelKey: "tabs.home", icon: HomeChart },
   { route: "health", ns: "ui", labelKey: "tabs.health", icon: HeartPulse },
+  { route: "habits", ns: "habits", labelKey: "tab", icon: CircleCheckBig },
   { route: "gym", ns: "gym", labelKey: "tab", icon: Dumbbell },
   { route: "more", ns: "ui", labelKey: "tabs.more", icon: Menu },
 ];
@@ -56,6 +56,7 @@ function Lens({ index, itemWidth }: { index: number; itemWidth: number }) {
 function Bar({ state, navigation, current: shown }: TabBarProps & { current: number }) {
   const { t } = useTranslation("ui");
   const { t: tg } = useTranslation("gym");
+  const { t: th } = useTranslation("habits");
   const [width, setWidth] = useState(0);
   // The tapped tab lights up (lens, icon, label) in its own small render; the tab's screen renders a frame later. One
   // render for both would hold the feedback until the whole screen had rendered.
@@ -69,7 +70,7 @@ function Bar({ state, navigation, current: shown }: TabBarProps & { current: num
       <View className="h-full flex-row">
         {TABS.map((tab, i) => {
           const { route, icon } = tab;
-          const label = tab.ns === "gym" ? tg(tab.labelKey) : t(tab.labelKey);
+          const label = tab.ns === "gym" ? tg(tab.labelKey) : tab.ns === "habits" ? th(tab.labelKey) : t(tab.labelKey);
           const route_ = state.routes.find((r) => r.name === route);
           const on = i === current;
           return (
@@ -101,17 +102,16 @@ function Bar({ state, navigation, current: shown }: TabBarProps & { current: num
 }
 
 /**
- * The tab bar and the round action, floating over the content at the bottom of the screen (tab roots), exactly as the
- * web's (spec §4.2). Their glass blurs the screen in view on iOS; Android draws the glass fill opaque (Glass).
+ * The tab bar, floating over the content at the bottom of the screen (tab roots), exactly as the web's (spec §4.2).
+ * Its glass blurs the screen in view on iOS; Android draws the glass fill opaque (Glass).
  */
 export function TabBar(props: TabBarProps) {
   const bottom = useTabBarBottom();
   const route = props.state.routes[props.state.index];
   const current = TABS.findIndex((t) => t.route === route?.name);
   return (
-    <View pointerEvents="box-none" className="absolute inset-x-3 flex-row justify-end gap-2" style={{ bottom }}>
+    <View pointerEvents="box-none" className="absolute inset-x-3 flex-row" style={{ bottom }}>
       <Bar {...props} current={current} />
-      <CheckInAction />
     </View>
   );
 }

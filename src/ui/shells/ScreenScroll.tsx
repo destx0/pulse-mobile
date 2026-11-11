@@ -1,12 +1,11 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { useLocalSearchParams, usePathname } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import Animated, { useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useScrollViewOffset, useSharedValue, withTiming } from "react-native-reanimated";
 import { Ground, HealthspanGround } from "../Ground";
 import { useKeyboardInset, useRevealFocused } from "../keyboard";
 import { useTheme } from "../theme";
-import { FloatingCheckIn, showsCheckIn } from "./CheckInAction";
 import { HEADER_FADE } from "./Header";
 import { useBottomClearance } from "./layout";
 import { usePullToSync } from "./PullToSync";
@@ -70,11 +69,9 @@ export type ScreenScrollProps = {
  * it and its fade), the check-in button floating over the foot of a detail screen, the web's pull to sync, and the keyboard:
  * the scroll view ends at its top and brings the focused field into view.
  */
-export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, floatingAction = true, onRefresh, children }: ScreenScrollProps) {
+export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, onRefresh, children }: ScreenScrollProps) {
   const { c } = useTheme();
   const clearance = useBottomClearance();
-  const pathname = usePathname();
-  const checkIn = floatingAction && showsCheckIn(pathname);
   const { section } = useLocalSearchParams<{ section?: string }>();
   const scroll = useAnimatedRef<Animated.ScrollView>();
   const offset = useScrollViewOffset(scroll);
@@ -132,9 +129,6 @@ export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, flo
       </View>
       <HealthspanGround.Provider value={!!healthspan}>{header}</HealthspanGround.Provider>
       {pull.indicator}
-      {checkIn && (
-        <FloatingCheckIn />
-      )}
     </View>
   );
 }

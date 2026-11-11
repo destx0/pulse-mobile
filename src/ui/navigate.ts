@@ -1,4 +1,5 @@
 import { router, type Href } from "expo-router";
+import { TAB_ROOT } from "@/lib/url";
 
 // ponytail: a time window stands in for "the push transition is still running" (iOS and Android native-stack pushes
 // take about 350 ms). Move to the stack's transitionEnd event if a slow phone ever needs longer.
@@ -29,8 +30,8 @@ export function replace(href: string) {
   router.replace(href as Href);
 }
 
-/** A tab root ("/", "/health", "/journal", "/more"), with or without a query. */
-export const isTabRoot = (path: string) => ["/", "/health", "/journal", "/more"].includes(path.split("?")[0]);
+/** A tab root ("/", "/health", "/habits", "/gym", "/more"), with or without a query. */
+export const isTabRoot = (path: string) => Object.values(TAB_ROOT).includes(path.split("?")[0]);
 
 /**
  * Opens a link from outside a tap (a notification, a launcher shortcut, another app). A tab root first closes what is

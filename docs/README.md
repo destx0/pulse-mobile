@@ -19,6 +19,7 @@ in `src/health/sync.ts` (30 and 8 at this writing).
 | `i18n.md`, `i18n-plan.md` | Keys, namespaces, plural rules, the checks. | 2026-10 |
 | `design/spec.md` | The Pulse PWA's design spec: the visual reference. Its stack names (Google, Recharts, shadcn) describe the web app, not this one; the app is React Native, Skia and NativeWind. | 2026-10 |
 | `gym.md`, `gym-plan.md`, `gym-ux-review.md` | The gym log's model, plan and review. | 2026-11 |
+| `habits.md` | The habit tracker: Loop's score, the screens, and the Android widgets. | 2026-11 |
 | `releases.md` | Version, signing, pugg, the update check. | 2026-11 |
 | `runbooks/` | Operational runbooks (the release review). | 2026-10 |
 | `audits/2026-11-03-snappiness-audit.md` | Why the app feels slow on a low-end phone, with measurements and the fix order. | 2026-11-03 |
@@ -40,6 +41,8 @@ The engine is written against three repositories that are **not part of this che
   `src/queries` and `src/core/scoring`/`algorithms`.
 - `~/personal/pulse` — the web app; its `docs/research/bevel/` is the Pulse engine's reference study.
 - `~/personal/noop` — WHOOP's naming and behaviour, where the study and WHOOP disagree.
+- [iSoron/uhabits](https://github.com/iSoron/uhabits) — Loop Habit Tracker, the reference for the habit tracker's score,
+  periods, streaks and widgets (see `habits.md`).
 
 Code comments cite them by path. On a machine without them (CI, a fresh clone), the citations cannot be checked; the
 code and the tests are the source of truth. If you add a formula from a reference, put the numbers it needs in the code

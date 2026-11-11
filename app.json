@@ -110,7 +110,89 @@
           "microphonePermission": false
         }
       ],
-      ["expo-localization", { "supportedLocales": { "android": ["en", "de", "fr", "es", "pt-BR", "ru", "pl", "it"] } }]
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "android": [
+              "en",
+              "de",
+              "fr",
+              "es",
+              "pt-BR",
+              "ru",
+              "pl",
+              "it"
+            ]
+          }
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "HabitCheck",
+              "label": "Habit tick",
+              "description": "One habit and its tick: tap to mark today done.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "HabitScore",
+              "label": "Habit score",
+              "description": "A habit's strength and its curve over the last 30 days.",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "HabitStreak",
+              "label": "Habit streak",
+              "description": "One habit's current and best streak.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "HabitHistory",
+              "label": "Habit history",
+              "description": "The last ten weeks of one habit, a square per day.",
+              "minWidth": "250dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 3,
+              "resizeMode": "horizontal|vertical",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "HabitToday",
+              "label": "Today's habits",
+              "description": "Today's habits with a tick each; numeric habits open in Pulse.",
+              "minWidth": "250dp",
+              "minHeight": "180dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 3,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

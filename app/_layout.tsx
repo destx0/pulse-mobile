@@ -138,6 +138,8 @@ function Screens({ onboarded }: { onboarded: boolean }) {
           <Stack.Screen name="health/heart-rate" />
           <Stack.Screen name="health/monitor" />
           <Stack.Screen name="health/stress" />
+          <Stack.Screen name="habits/[id]" />
+          <Stack.Screen name="habits/edit" />
           <Stack.Screen name="journal/insights" />
           <Stack.Screen name="leetcode" />
           <Stack.Screen name="metric/[key]" />

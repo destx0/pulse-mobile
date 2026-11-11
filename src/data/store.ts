@@ -2,6 +2,7 @@
 // the screen queries read both. One implementation on expo-sqlite (db.ts); tests may use an in-memory one.
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
+import type { Habit, HabitEntry } from "./habits";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { Stage1Activity, Stage1Day, Stage2Row } from "@/pipeline/types";
 import type { Report } from "@/core/algorithms/reports";
@@ -190,6 +191,22 @@ export interface Store {
   deleteGymMeasurement(id: string): Promise<void>;
   getGymImport(): Promise<GymImportState | null>;
   putGymImport(state: GymImportState): Promise<void>;
+
+  // Habits (src/core/habits): the owner's own tracker. Local to the phone; no health source reads or writes it.
+  /** Every habit, including archived ones, in their saved order. */
+  habits(): Promise<Habit[]>;
+  /** Inserts or replaces one habit. */
+  putHabit(habit: Habit): Promise<void>;
+  /** Removes a habit and every entry of it. */
+  deleteHabit(id: string): Promise<void>;
+  /** Entries with from <= day <= to (every one without a range), oldest first. */
+  habitEntries(from?: string, to?: string): Promise<HabitEntry[]>;
+  /** Inserts or replaces one day's entry. */
+  putHabitEntry(entry: HabitEntry): Promise<void>;
+  /** Removes one day's entry (the day goes back to unknown). */
+  deleteHabitEntry(habitId: string, day: string): Promise<void>;
+  /** Drops every habit and entry (Delete everything). */
+  clearHabits(): Promise<void>;
 
   // Upkeep (src/background/maintenance.ts)
   /**

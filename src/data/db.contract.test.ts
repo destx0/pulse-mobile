@@ -4,6 +4,7 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Metrics } from "./types";
 import type { ScoreRow, Store } from "./store";
+import type { Habit } from "@/core/habits/types";
 
 /** The slice of expo-sqlite's SQLiteDatabase SqliteStore uses, over node:sqlite's synchronous in-memory database. */
 class FakeDb {
@@ -143,6 +144,23 @@ describe("SqliteStore contract", () => {
     await store.putScores({ ...score("2026-10-05", 30), strain: { hrCount: 312, hrMinutesAm: 280, hrMinutesPm: 240 } as ScoreRow["strain"] });
     expect(await store.wornDays({ from: "2026-10-05", to: "2026-10-05" })).toEqual([{ day: "2026-10-05", hrCount: 312, hrMinutesAm: 280, hrMinutesPm: 240 }]);
     expect(await store.wornDays({ from: "2026-10-06", to: "2026-10-06" })).toEqual([]);
+  });
+
+  it("keeps habits and their days, replaces a day, and deletes the entries with the habit", async () => {
+    const habit: Habit = {
+      id: "h1", name: "Read", question: null, notes: null, kind: "yes_no", color: "optimal", period: "week", target: 3,
+      targetType: "at_least", unit: null, position: 0, archived: false, createdAt: 1, updatedAt: 1,
+    };
+    await store.putHabit(habit);
+    await store.putHabitEntry({ habitId: "h1", day: "2026-11-01", value: 1, skip: false, note: null, updatedAt: 1 });
+    await store.putHabitEntry({ habitId: "h1", day: "2026-11-02", value: 1, skip: false, note: null, updatedAt: 1 });
+    expect(await store.habits()).toEqual([habit]);
+    expect((await store.habitEntries("2026-11-02", "2026-11-02")).map((e) => e.day)).toEqual(["2026-11-02"]);
+    await store.putHabitEntry({ habitId: "h1", day: "2026-11-02", value: 0, skip: true, note: "rest", updatedAt: 2 });
+    expect((await store.habitEntries()).find((e) => e.day === "2026-11-02")).toMatchObject({ value: 0, skip: true, note: "rest" });
+    await store.deleteHabit("h1");
+    expect(await store.habits()).toEqual([]);
+    expect(await store.habitEntries()).toEqual([]);
   });
 
   it("writes a first set list in one batch", async () => {

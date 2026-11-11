@@ -1079,3 +1079,27 @@ The Strong import reports `{ done, total }` after every session (`importStrong`'
 ten, so the onboarding bar and the gym import screen move instead of showing a spinner. The batch leaves the existing
 `putGymSets` transaction and duplicate check untouched. `ProgressBar` moved to `src/ui/ProgressBar.tsx` so onboarding,
 Settings and the gym import share it; Settings › Data source re-exports it.
+
+## Android home-screen widgets: the community library, not expo-widgets
+
+Expo SDK 57's `expo-widgets` is iOS-only (Android support arrives later), so the habit widgets use
+[`react-native-android-widget`](https://github.com/sAleksovski/react-native-android-widget) 0.26, which Expo's own
+Android widget tutorial uses. Its config plugin generates an `AppWidgetProvider` per entry in `app.json` and the shared
+`WidgetConfigurationActivity`, so Continuous Native Generation is untouched: `android/` stays generated, and every
+widget needs a new native build (Expo Go cannot load it).
+
+A widget is a `RemoteViews` tree drawn from JSX primitives (`FlexWidget`, `TextWidget`, `SvgWidget`), not React Native
+views: no hooks, no context, no NativeWind classes, with concrete `#rrggbb` colours. The app renders light and dark
+variants and the library picks one. Text sizes are fixed (12-13 px labels, 32-40 px values), so the layouts are readable
+at 2×2 and scale by `match_parent` inside the host.
+
+The headless task handler (`src/widgets/task.tsx`) is registered in `index.ts` beside the background task. Android
+calls it for add/update/resize/delete/click with no UI; it opens the same SQLite store, toggles a yes/no day for a
+`clickAction: "toggle"` and calls `renderWidget` with the new tree. Numeric widgets use `OPEN_URI` with
+`pulse://habits/<id>` and let the app take the amount. The four per-habit widgets store their chosen habit in
+AsyncStorage (`pulse.habitWidget.<widgetId>`), chosen in `src/widgets/config.tsx` (the configuration screen is its own
+React root, so it uses React Native views and the palette's concrete colours).
+
+Android's floor for `updatePeriodMillis` is 30 minutes; a write in the app calls `requestWidgetUpdate` immediately
+through `src/widgets/update.ts`, so a tick in Pulse shows on the home screen at once. A widget click runs in a different
+JS pass from the open screen, hence the habit screens read with `freshMs: 0` and the widget handler redraws itself.

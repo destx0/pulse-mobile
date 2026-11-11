@@ -4,6 +4,7 @@
 import type { DayRange, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
+import type { Habit, HabitEntry } from "./habits";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
 import { minuteHr } from "@/core/engine/context";
@@ -119,6 +120,8 @@ export class MemoryStore implements Store {
   private gymSetMap = new Map<string, GymSet>();
   private gymMeasures = new Map<string, GymMeasurement>();
   private gymImport: GymImportState | null = null;
+  private habitMap = new Map<string, Habit>();
+  private habitEntryMap = new Map<string, HabitEntry>();
 
   async getProfile() {
     return this.profile && copy(this.profile);
@@ -461,6 +464,30 @@ export class MemoryStore implements Store {
     this.gymImport = copy(state);
   }
 
+  // ── the habits ───────────────────────────────────────────────────────────────────────────────────────────────────
+  async habits() {
+    return [...this.habitMap.values()].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)).map(copy);
+  }
+  async putHabit(habit: Habit) {
+    this.habitMap.set(habit.id, copy(habit));
+  }
+  async deleteHabit(id: string) {
+    this.habitMap.delete(id);
+    for (const [k, e] of this.habitEntryMap) if (e.habitId === id) this.habitEntryMap.delete(k);
+  }
+  async habitEntries(from?: string, to?: string) {
+    return [...this.habitEntryMap.values()]
+      .filter((e) => (from === undefined || e.day >= from) && (to === undefined || e.day <= to))
+      .sort((a, b) => a.day.localeCompare(b.day) || a.habitId.localeCompare(b.habitId))
+      .map(copy);
+  }
+  async putHabitEntry(entry: HabitEntry) {
+    this.habitEntryMap.set(key2(entry.habitId, entry.day), copy(entry));
+  }
+  async deleteHabitEntry(habitId: string, day: string) {
+    this.habitEntryMap.delete(key2(habitId, day));
+  }
+
   async compactHr(beforeTs: number) {
     return this.hr.compact(beforeTs);
   }
@@ -477,6 +504,11 @@ export class MemoryStore implements Store {
     this.gymSetMap.clear();
     this.gymMeasures.clear();
     this.gymImport = null;
+  }
+
+  async clearHabits() {
+    this.habitMap.clear();
+    this.habitEntryMap.clear();
   }
 
   async clearAll() {

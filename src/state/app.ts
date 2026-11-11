@@ -34,6 +34,7 @@ import { clearScreenCache } from "@/screens/screenCache";
 import { ensureDefaultTags } from "@/queries/journal";
 import { applyDisplay } from "./display";
 import { checkForUpdate } from "./update";
+import { clearHabitWidgetConfigs } from "@/widgets/configKeys";
 
 export type { Source };
 export type Status = "booting" | "needs_profile" | "needs_permissions" | "syncing" | "ready" | "error";
@@ -106,7 +107,7 @@ export const appState = () => state;
  * What a write can change. Scores only move when the pipeline runs (or the profile/source does), so a log, a gym set or
  * a journal answer must not throw away the parsed score rows: it bumps the screen version, not the scores one.
  */
-export type DataScope = "scores" | "logs" | "journal" | "gym" | "display";
+export type DataScope = "scores" | "logs" | "journal" | "gym" | "habits" | "display";
 
 let version = 0;
 let scoresVersion = 0;
@@ -434,6 +435,7 @@ export async function exploreSample(): Promise<void> {
     const demo = await withRunLock(async () => {
       await demoStore!.clearAll();
       await demoStore!.clearGym();
+      await demoStore!.clearHabits();
       const seeded = await seedDemo(demoStore!, { today, timeZone });
       await seedDemoFood(demoStore!, { today, timeZone, now: Math.floor(Date.now() / 1000) });
       await ensureDefaultTags(demoStore!);
@@ -542,6 +544,7 @@ export async function reset(): Promise<void> {
     for (const store of [real, demo]) {
       await store.clearAll();
       await store.clearGym();
+      await store.clearHabits();
       // clearAll keeps the coach's chats (they are not health rows); "Delete everything" must not.
       await resetCoachState(store);
     }
@@ -549,6 +552,7 @@ export async function reset(): Promise<void> {
   // A rest countdown belongs to the gym that was just deleted; it must not fire into a missing session.
   await cancelRest();
   await resetLeetCode();
+  await clearHabitWidgetConfigs();
   deleteAllPhotos();
   await AsyncStorage.multiRemove(PREFERENCES).catch(() => {});
   await forgetChanges();

@@ -6,6 +6,7 @@ import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from "exp
 import { isDeadConnection } from "./deadConnection";
 import type { CoachChatRow, DayRange, EntrySource, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet, SetType } from "./gym";
+import type { Habit, HabitEntry } from "./habits";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
@@ -93,6 +94,16 @@ create index if not exists gym_sets_session on gym_sets (session_id, position, s
 create index if not exists gym_sets_exercise on gym_sets (exercise_id, ts);
 create table if not exists gym_measurements (id text primary key, day text not null, kind text not null, value real not null, unique (day, kind));
 create table if not exists gym_import (id integer primary key check (id = 1), data text not null);
+create table if not exists habits (
+  id text primary key, name text not null, question text, notes text, kind text not null, color text not null,
+  period text not null, target real not null, target_type text not null, unit text, position integer not null,
+  archived integer not null default 0, created_at integer not null, updated_at integer not null
+);
+create table if not exists habit_entries (
+  habit_id text not null, day text not null, value real not null, skip integer not null default 0, note text,
+  updated_at integer not null, primary key (habit_id, day)
+);
+create index if not exists habit_entries_day on habit_entries(day);
 `;
 
 /**
@@ -980,6 +991,40 @@ class SqliteStore implements Store {
     await this.db.runAsync("insert or replace into gym_import (id, data) values (1, ?)", [json(state)]);
   }
 
+  async habits() {
+    const rows = await this.db.getAllAsync<HabitRow>("select * from habits order by position, name");
+    return rows.map(habitOf);
+  }
+  async putHabit(h: Habit) {
+    await this.db.runAsync(
+      `insert or replace into habits (id, name, question, notes, kind, color, period, target, target_type, unit, position, archived, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [h.id, h.name, h.question, h.notes, h.kind, h.color, h.period, h.target, h.targetType, h.unit, h.position, bool(h.archived), h.createdAt, h.updatedAt],
+    );
+  }
+  async deleteHabit(id: string) {
+    await this.tx(async (db) => {
+      await db.runAsync("delete from habit_entries where habit_id = ?", [id]);
+      await db.runAsync("delete from habits where id = ?", [id]);
+    });
+  }
+  async habitEntries(from?: string, to?: string) {
+    const rows =
+      from && to
+        ? await this.db.getAllAsync<HabitEntryRow>("select * from habit_entries where day >= ? and day <= ? order by day, habit_id", [from, to])
+        : await this.db.getAllAsync<HabitEntryRow>("select * from habit_entries order by day, habit_id");
+    return rows.map(habitEntryOf);
+  }
+  async putHabitEntry(e: HabitEntry) {
+    await this.db.runAsync(
+      `insert or replace into habit_entries (habit_id, day, value, skip, note, updated_at) values (?, ?, ?, ?, ?, ?)`,
+      [e.habitId, e.day, e.value, bool(e.skip), e.note, e.updatedAt],
+    );
+  }
+  async deleteHabitEntry(habitId: string, day: string) {
+    await this.db.runAsync("delete from habit_entries where habit_id = ? and day = ?", [habitId, day]);
+  }
+
   async clearAll() {
     await this.tx(async (db) => {
       for (const t of TABLES) await db.runAsync(`delete from ${t}`);
@@ -988,6 +1033,12 @@ class SqliteStore implements Store {
   async clearGym() {
     await this.tx(async (db) => {
       for (const t of GYM_TABLES) await db.runAsync(`delete from ${t}`);
+    });
+  }
+  async clearHabits() {
+    await this.tx(async (db) => {
+      await db.runAsync("delete from habit_entries");
+      await db.runAsync("delete from habits");
     });
   }
 }
@@ -1006,6 +1057,38 @@ type GymSetRow = {
   seconds: number | null; distance_m: number | null; rpe: number | null; type: string; superset_id: string | null; completed: number; ts: number | null; note: string | null;
 };
 type GymMeasurementRow = { id: string; day: string; kind: string; value: number };
+
+// ── the habits' row shapes ─────────────────────────────────────────────────────────────────────────────────────────
+type HabitRow = {
+  id: string; name: string; question: string | null; notes: string | null; kind: string; color: string; period: string;
+  target: number; target_type: string; unit: string | null; position: number; archived: number; created_at: number; updated_at: number;
+};
+type HabitEntryRow = { habit_id: string; day: string; value: number; skip: number; note: string | null; updated_at: number };
+
+const habitOf = (r: HabitRow): Habit => ({
+  id: r.id,
+  name: r.name,
+  question: r.question,
+  notes: r.notes,
+  kind: r.kind === "numeric" ? "numeric" : "yes_no",
+  color: r.color as Habit["color"],
+  period: r.period === "week" ? "week" : r.period === "month" ? "month" : "day",
+  target: r.target,
+  targetType: r.target_type === "at_most" ? "at_most" : "at_least",
+  unit: r.unit,
+  position: r.position,
+  archived: r.archived === 1,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
+const habitEntryOf = (r: HabitEntryRow): HabitEntry => ({
+  habitId: r.habit_id,
+  day: r.day,
+  value: r.value,
+  skip: r.skip === 1,
+  note: r.note,
+  updatedAt: r.updated_at,
+});
 
 const gymExerciseOf = (r: GymExerciseRow): GymExercise => ({
   id: r.id,

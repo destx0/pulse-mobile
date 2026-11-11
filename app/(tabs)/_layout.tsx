@@ -4,13 +4,14 @@ import { Tabs } from "expo-router";
 import { TabBar } from "@/ui/shells/TabBar";
 import { useTheme } from "@/ui/theme";
 
-// The bottom tabs: Home, Health, Gym, More. Gym replaced Journal, which lives under More and behind the check-in action. The bar is Pulse's own floating glass bar with
-// the round check-in action (src/ui/shells/TabBar.tsx), the same on iOS and Android; Expo Router's <Tabs> supplies the
-// navigation state and keeps each tab's screen alive.
+// The bottom tabs: Home, Health, Habits, Gym, More. The Journal is retired: its route stays reachable only from old
+// links. The bar is Pulse's own floating glass bar (src/ui/shells/TabBar.tsx), the same on iOS and Android; Expo
+// Router's <Tabs> supplies the navigation state and keeps each tab's screen alive.
 export default function TabsLayout() {
   const { c } = useTheme();
   const { t } = useTranslation("ui");
   const { t: tg } = useTranslation("gym");
+  const { t: th } = useTranslation("habits");
   // `sceneStyle`: the ground behind a tab while it switches, not the navigation theme's default. `shift`: the tabs
   // cross-fade and move 50 px toward the tapped side (native driver), over the spec's base duration and standard ease.
   return (
@@ -25,8 +26,9 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: t("tabs.home") }} />
       <Tabs.Screen name="health" options={{ title: t("tabs.health") }} />
+      <Tabs.Screen name="habits" options={{ title: th("tab") }} />
       <Tabs.Screen name="gym" options={{ title: tg("tab") }} />
-      {/* Still a route (from More, from the check-in action), no longer a tab. */}
+      {/* Still a route from old links and More's history, no longer a tab. */}
       <Tabs.Screen name="journal" options={{ href: null }} />
       <Tabs.Screen name="more" options={{ title: t("tabs.more") }} />
     </Tabs>

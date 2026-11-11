@@ -21,6 +21,8 @@ const MEMO = new Set<keyof Store>([
   "getSeries",
   "hrBounds",
   "wornDays",
+  "habits",
+  "habitEntries",
 ]);
 
 type Interval = { from: string; to: string };

@@ -49,7 +49,7 @@ export type PageShellProps = {
   children?: ReactNode;
 };
 
-/** Tab roots: Home, Health, Journal, More (spec §4.5). */
+/** Tab roots: Home, Health, Habits, Gym, More (spec §4.5). */
 export function PageShell({ title, dateSwitcher, actions, layout = "stack", slots, rings, headerRight, loading, onRefresh, children }: PageShellProps) {
   const { scrollY, threshold, onScroll, progress } = useCollapse();
   const home = layout === "home";

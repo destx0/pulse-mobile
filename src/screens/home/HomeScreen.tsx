@@ -5,7 +5,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { i18n } from "@/i18n/config";
 import { STRESS_WORD } from "@/lib/bands";
 import { cardInfo } from "@/ui/shells/cardInfo";
-import { CalendarRange, Check, ChevronRight, CircleAlert, Info, Lightbulb, Maximize2, Moon, Plus, Sun, TriangleAlert } from "lucide-react-native";
+import { CalendarRange, Check, ChevronRight, CircleAlert, Info, Maximize2, Moon, Plus, Sun, TriangleAlert } from "lucide-react-native";
 import { isDashboardKey } from "@/lib/dashboard";
 import { dashboardChoice } from "@/actions/dashboard";
 import { actionCtx, dataChanged } from "@/state/app";
@@ -49,7 +49,6 @@ import { ADD_ACTIVITY_INFO, ENERGY_INFO, STRAIN_RECOVERY_INFO, TONIGHT_INFO } fr
 import { energySeries, statProps, stressSeries } from "../_lib/view";
 import { getMore } from "@/queries/settings";
 import { HEALTH_KEY, healthQuery } from "../health/HealthScreen";
-import { journalKey, journalQuery } from "../journal/query";
 import { MORE_KEY } from "../more/MoreScreen";
 import { recoveryKey, recoveryQuery } from "../recovery/RecoveryScreen";
 import { sleepKey, sleepQuery } from "../sleep/SleepScreen";
@@ -62,7 +61,7 @@ import { HeartRateTile } from "./HeartRateTile";
 import { HomeInsight } from "./HomeInsight";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { LeetCodeToday } from "./LeetCodeToday";
-import { CardButtonContent, CardButtonLink, GradientBanner, IconLink } from "./parts";
+import { CardButtonContent, GradientBanner, IconLink } from "./parts";
 import { PlusKey } from "./PlusMenu";
 import { TonightPlan } from "./TonightPlan";
 import { push } from "@/ui/navigate";
@@ -123,7 +122,6 @@ export function HomeScreen() {
         { query: recoveryQuery(), key: recoveryKey() },
         { query: strainQuery(), key: strainKey() },
         { query: healthQuery, key: HEALTH_KEY },
-        { query: journalQuery(), key: journalKey() },
         { query: getMore, key: MORE_KEY },
         ...steps,
       ]);
@@ -244,7 +242,6 @@ function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {
                     </MetricState>
                   </SectionShell>
                 )}
-                <JournalWeek vm={vm} at={at} />
                 <EnergyCard vm={vm} timeZone={timeZone} />
               </View>
             </SectionShell>
@@ -335,38 +332,6 @@ function DayBanner({ outlook }: { outlook: NonNullable<HomeVM["outlook"]> }) {
       </GradientBanner>
       <InfoDialog open={open} onClose={() => setOpen(false)} title={outlook.title} icon={<Icon icon={glyph} size={28} tone="foreground" strokeWidth={1.5} />} body={outlook.body} />
     </>
-  );
-}
-
-function JournalWeek({ vm, at }: { vm: HomePageVM; at: (href: string) => string }) {
-  const { t } = useTranslation("home");
-  return (
-    <SectionShell variant="card" title={t("section.myJournal")} action={<IconLink href={at("/journal")} label={t("journal.open")} icon={ChevronRight} />}>
-      <View accessibilityRole="list" className="flex-row pt-1">
-        {vm.journalWeek.map((w) => {
-          const current = w.day === vm.day;
-          return (
-            <Press
-              activeBg="bg-accent"
-              key={w.day}
-              accessibilityRole="link"
-              accessibilityLabel={t(w.done ? "journal.checkedIn" : "journal.noCheckIn", { day: formatDay(w.day, DAY.long) })}
-              accessibilityState={{ selected: current }}
-              onPress={() => go(dayHref("/journal", w.day, vm.today))}
-              className="min-h-16 flex-1 items-center justify-center gap-2 rounded-lg"
-            >
-              <Text accessible={false} className={cn("text-xs font-bold uppercase leading-4 tracking-[0.1em]", current ? "text-foreground" : "text-muted-foreground")}>
-                {formatDay(w.day, { weekday: "short" })}
-              </Text>
-              <View accessibilityElementsHidden className={cn("size-7 items-center justify-center rounded-full", w.done ? "bg-optimal" : "border border-foreground/25")}>
-                {w.done && <Icon icon={Check} size={16} tone="background" strokeWidth={3} />}
-              </View>
-            </Press>
-          );
-        })}
-      </View>
-      <CardButtonLink href="/journal/insights" icon={Lightbulb} label={t("journal.insights")} className="mt-3" />
-    </SectionShell>
   );
 }
 
