@@ -29,4 +29,18 @@ describe("cross-source exercise duplicates", () => {
     expect(ids([record("a"), record("b", "com.samsung", 60, 300)])).toHaveLength(2);
     expect(ids([record("a"), record("b", "com.samsung", 1800, 3600)])).toHaveLength(2);
   });
+
+  it("collapses a gym session and the band's auto-detected copy, a few minutes and a sport name apart", () => {
+    const gym = record("gym", "ch.duartesantos.opengym", 300, 3000, 70);
+    const auto = record("auto", "com.fitbit", 0, 3300, 0, "Auto-detected workout");
+    expect(ids([auto, gym])).toEqual(["gym"]);
+    expect(ids([gym, auto])).toEqual(["gym"]);
+    expect(ids([record("lift", "com.hevy", 0, 2400, 81, "Push"), record("auto", "com.fitbit", 600, 3000, 70)])).toEqual(["lift"]);
+  });
+
+  it("keeps a run inside a strength session, and a gym copy that only half overlaps", () => {
+    const gym = record("gym", "com.hevy", 0, 3600, 70, "Push");
+    expect(ids([gym, record("run", "com.fitbit", 600, 2400, 56)])).toEqual(["gym", "run"]);
+    expect(ids([gym, record("other", "com.fitbit", 1800, 5400, 0)])).toHaveLength(2);
+  });
 });
