@@ -222,6 +222,27 @@ export async function restoreSets(store: Store, sets: GymSet[]): Promise<void> {
   );
 }
 
+/** The unticked sets of one exercise go: it is skipped for today, the sets already done stay and renumber without a gap. */
+export async function skipExercise(store: Store, sessionId: string, exerciseId: string): Promise<GymSet[]> {
+  return skipSets(store, sessionId, (s) => s.exerciseId === exerciseId);
+}
+
+/** Every unticked set goes before the workout is finished: what was not done is not part of it. Returns how many went. */
+export async function skipPendingSets(store: Store, sessionId: string): Promise<number> {
+  return (await skipSets(store, sessionId, () => true)).length;
+}
+
+async function skipSets(store: Store, sessionId: string, match: (s: GymSet) => boolean): Promise<GymSet[]> {
+  const sets = await store.gymSets([sessionId]);
+  const removed = sets.filter((s) => !s.completed && match(s));
+  for (const s of removed) await store.deleteGymSet(s.id);
+  for (const exerciseId of new Set(removed.map((s) => s.exerciseId))) {
+    const left = sets.filter((s) => s.exerciseId === exerciseId && s.completed).sort((a, b) => a.setNo - b.setNo);
+    for (const [i, s] of left.entries()) if (s.setNo !== i + 1) await store.putGymSet({ ...s, setNo: i + 1 });
+  }
+  return removed;
+}
+
 /** A new blank set at the end of an exercise, copied from the last one's weight and reps. */
 export async function addSet(store: Store, sessionId: string, exerciseId: string): Promise<GymSet | null> {
   const sets = await store.gymSets([sessionId]);
@@ -349,14 +370,9 @@ export async function deleteRoutine(store: Store, id: string): Promise<void> {
   await store.deleteGymRoutine(id);
 }
 
-/**
- * Turns a finished workout into a template: its working exercises, the sets each was done for, and the most common
- * reps. The next session with that name then opens with the same shape. A name already in the templates gets a number.
- */
-export async function saveSessionAsRoutine(store: Store, session: GymSession, now: number): Promise<GymRoutine | null> {
-  const sets = (await store.gymSets([session.id])).filter(isWorkSet);
-  if (!sets.length) return null;
-  const items = groupByExercise(sets)
+/** A session's working exercises as template rows: each exercise's set count and its most common reps. */
+function routineItemsOf(sets: readonly GymSet[]) {
+  return groupByExercise(sets)
     .map((g, position) => {
       const counts = new Map<number, number>();
       for (const s of g.sets) counts.set(s.reps, (counts.get(s.reps) ?? 0) + 1);
@@ -364,6 +380,16 @@ export async function saveSessionAsRoutine(store: Store, session: GymSession, no
       return { exerciseId: g.exerciseId, position, sets: g.sets.length, reps };
     })
     .filter((i) => i.exerciseId);
+}
+
+/**
+ * Turns a finished workout into a template: its working exercises, the sets each was done for, and the most common
+ * reps. The next session with that name then opens with the same shape. A name already in the templates gets a number.
+ */
+export async function saveSessionAsRoutine(store: Store, session: GymSession, now: number): Promise<GymRoutine | null> {
+  const sets = (await store.gymSets([session.id])).filter(isWorkSet);
+  if (!sets.length) return null;
+  const items = routineItemsOf(sets);
   if (!items.length) return null;
   const { routines } = await store.gymRoutines();
   const taken = new Set(routines.map((r) => r.name.toLowerCase()));
@@ -375,6 +401,24 @@ export async function saveSessionAsRoutine(store: Store, session: GymSession, no
     { name, items: items.map(({ exerciseId, sets: count, reps }) => ({ exerciseId, sets: count, reps })) },
     now,
   );
+  return res.ok ? res.data : null;
+}
+
+/**
+ * Makes the session's template match what is being done: the exercises still in it, each with its set count and most
+ * common reps. The template keeps its name and position; the next session from it starts with this shape, not the old
+ * exercises. A session that did not start from a template has nothing to update.
+ */
+export async function updateRoutineFromSession(store: Store, session: GymSession, now: number): Promise<GymRoutine | null> {
+  if (!session.routineId) return null;
+  const sets = (await store.gymSets([session.id])).filter(isWorkSet);
+  if (!sets.length) return null;
+  const { routines } = await store.gymRoutines();
+  const routine = routines.find((r) => r.id === session.routineId);
+  if (!routine) return null;
+  const items = routineItemsOf(sets);
+  if (!items.length) return null;
+  const res = await saveRoutine(store, { id: routine.id, name: routine.name, notes: routine.notes, items: items.map(({ exerciseId, sets: count, reps }) => ({ exerciseId, sets: count, reps })) }, now);
   return res.ok ? res.data : null;
 }
 

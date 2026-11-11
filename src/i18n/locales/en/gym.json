@@ -1,5 +1,15 @@
 {
   "tab": "Gym",
+  "card": {
+    "title": "Today’s workout",
+    "start": "Start {{name}}",
+    "startEmpty": "Start a workout",
+    "resume": "Resume {{name}}",
+    "lastDone": "Last done {{when}}",
+    "exercises_one": "{{count}} exercise",
+    "exercises_other": "{{count}} exercises",
+    "logWeight": "Log weight"
+  },
   "home": {
     "templates": "My Templates ({{count}})",
     "neverDone": "Never done",
@@ -33,6 +43,16 @@
     "finishPending": "{{count}} sets are not ticked and will be left out of the history.",
     "emptyFinishTitle": "No working sets",
     "emptyFinishBody": "This workout has no ticked working set, so finishing it would leave an empty day in the history. Discard it?",
+    "skipPending": "Skip unfinished sets",
+    "skipPendingHint_one": "The set you did not tick is removed from this workout.",
+    "skipPendingHint_other": "The {{count}} sets you did not tick are removed from this workout.",
+    "skipToday": "Skip for today",
+    "skipped": "{{name}} skipped",
+    "updateTemplate": "Update template",
+    "updateTemplateHint": "Make this template match today's exercises.",
+    "templateUpdated": "{{name}} updated",
+    "templateEmpty": "Tick at least one set before updating the template.",
+    "savedTemplateUpdated": "Workout saved · Template updated",
     "emptySet": "Add reps, time or distance first.",
     "saved": "Workout saved",
     "complete": "Workout complete",

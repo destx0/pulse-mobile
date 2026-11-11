@@ -2,7 +2,7 @@ import "../global.css";
 
 import { useEffect, useMemo } from "react";
 import { useFonts } from "expo-font";
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as SystemUI from "expo-system-ui";
 import { StatusBar } from "expo-status-bar";
@@ -19,6 +19,7 @@ import { Figtree_700Bold } from "@expo-google-fonts/figtree/700Bold";
 
 import { i18n } from "@/i18n/config";
 import { useLanguage } from "@/i18n/useLanguage";
+import { activeSession } from "@/actions/gym";
 import { useNotificationDeepLinks, useTabLinks } from "@/background/links";
 import { Opening } from "@/screens/Opening";
 import { ScreenError } from "@/screens/ScreenError";
@@ -26,6 +27,7 @@ import { ShellData } from "@/screens/ShellData";
 import { boot, retryBoot, useApp } from "@/state/app";
 import { AppProviders } from "@/ui/providers";
 import { useTheme } from "@/ui/theme";
+import { push } from "@/ui/navigate";
 
 // Screens out of view (under a pushed screen, or an inactive tab) stop rendering until they are shown again.
 enableFreeze(true);
@@ -40,6 +42,9 @@ SplashScreen.setOptions({ duration: 0, fade: false });
 // A screen that throws while it draws shows ScreenError in its place, here and in every nested layout, instead of
 // closing the app.
 export const unstable_settings = { anchor: "(tabs)", screenErrorBoundary: ScreenError };
+
+/** One resume check per launch: closing and reopening a running workout lands on it again. */
+let resumedWorkout = false;
 
 export default function RootLayout() {
   // Fonts: Figtree for text, Barlow for numerals, as the web (pulse src/app/layout.tsx). Each weight is its own file
@@ -85,6 +90,16 @@ export default function RootLayout() {
 function Screens({ onboarded }: { onboarded: boolean }) {
   const { c, scheme } = useTheme();
   const language = useLanguage();
+  const store = useApp((s) => s.store);
+  const navReady = !!useRootNavigationState()?.key;
+  // A workout left running when the app closed is where the person was going: open its page on the way in, once a launch.
+  useEffect(() => {
+    if (!navReady || !onboarded || !store || resumedWorkout) return;
+    resumedWorkout = true;
+    void activeSession(store)
+      .then((session) => session && push(`/gym/session/${session.id}`))
+      .catch(() => {});
+  }, [navReady, onboarded, store]);
   // A tapped notification opens its screen once the navigator exists, a cold start included (src/background/links.ts).
   useNotificationDeepLinks();
   useTabLinks();

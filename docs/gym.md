@@ -35,6 +35,9 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
   was trained; tapping the previous cell copies that session's numbers.
 - **Set details.** Tap the set number for working / warmup / drop / failure, an RPE, a note, or to delete the set. Warmups
   are left out of volume, PRs and the +% change. Deleting a set or an exercise offers Undo.
+- **Skip for today.** The exercise menu drops that exercise's unticked sets and keeps the ones already done; the template
+  is untouched, and Undo puts the sets back. Finishing offers the same for the whole workout, so what was not ticked does
+  not stay in the session.
 - **Supersets and order.** The exercise menu ties an exercise to the next one, moves it up or down, or opens its history.
   Both exercises of a superset wear the badge and keep their sets together in the list.
 - **Units per exercise.** The menu switches one exercise between kg and lb (as Strong does). Weight is stored in
@@ -45,6 +48,9 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
   number.
 - **The finish card** sums the workout, celebrates the sets that beat an earlier 1RM, and turns a free workout into a
   template. A workout with no ticked working set is discarded rather than saved as an empty day.
+- **The template can be updated while training.** "Update template" in the session menu (or on the finish dialog) makes
+  the session's template match its ticked exercises, sets and most common reps; the next session from it starts with
+  that shape, not the old exercises.
 
 ## Data
 

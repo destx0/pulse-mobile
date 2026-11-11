@@ -7,10 +7,10 @@ import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useLocalSearchParams, useIsFocused } from "expo-router";
-import { ArrowDown, ArrowUp, Check, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Check, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, SkipForward, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
-import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, stopRest, updateSession } from "@/actions/gym";
+import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, skipExercise, skipPendingSets, stopRest, updateRoutineFromSession, updateSession } from "@/actions/gym";
 import { cancelRest, scheduleRest } from "@/background/notify";
 import { fromUnit, loadText } from "@/core/gym/load";
 import { isWorkSet } from "@/core/gym/stats";
@@ -34,6 +34,7 @@ import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
 import { useTheme } from "@/ui/theme";
 import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText } from "./parts";
+import { Switch } from "@/screens/settings/controls";
 import { QueryError } from "@/ui/shells/QueryError";
 
 export function SessionScreen() {
@@ -43,6 +44,9 @@ export function SessionScreen() {
   const { data, error, reload } = useScreen((ctx) => getGymSession(ctx, id), ["gym-session", id], { eager: true });
   const vm = data;
   const [confirm, setConfirm] = useState<"finish" | "discard" | "delete" | null>(null);
+  // What Finish does with the workout: drop the unticked sets, and make the template match today's exercises.
+  const [skipPending, setSkipPending] = useState(true);
+  const [updateTemplate, setUpdateTemplate] = useState(false);
   // When the finish dialog opened: its body says how long the workout has run, and it need not tick while it waits.
   const [confirmAt, setConfirmAt] = useState(0);
   const [rename, setRename] = useState(false);
@@ -193,6 +197,23 @@ export function SessionScreen() {
         });
       })(),
     );
+  // Skipping keeps the sets already done (and their history) and drops only what is left.
+  const skipBlock = (block: Block) =>
+    track(
+      (async () => {
+        const removed = await skipExercise(store, session.id, block.exercise.id);
+        if (!removed.length) return;
+        dataChanged("gym");
+        toast.undo(t("session.skipped", { name: block.exercise.name }), {
+          label: t("session.undo"),
+          onPress: async () => {
+            await restoreSets(store, removed);
+            dataChanged("gym");
+            flashRows(removed);
+          },
+        });
+      })(),
+    );
   const addOne = (block: Block) =>
     track(
       (async () => {
@@ -245,6 +266,16 @@ export function SessionScreen() {
         toast.success(t("session.templateSaved", { name: routine.name }));
       })(),
     );
+  // Make the running session's template match it, so tomorrow's workout is this one, not the old plan.
+  const saveTemplateUpdate = () =>
+    track(
+      (async () => {
+        const routine = await updateRoutineFromSession(store, session, nowS());
+        dataChanged("gym");
+        if (routine) toast.success(t("session.templateUpdated", { name: routine.name }));
+        else toast.error(t("session.templateEmpty"));
+      })(),
+    );
   // The picker is the heaviest list in the gym: its read starts on the tap, so its rows are there when it lands.
   const addExercise = () => {
     void prefetch(getGymPicker, ["gym-picker"]);
@@ -278,6 +309,8 @@ export function SessionScreen() {
                 <Press
                   accessibilityRole="button"
                   onPress={() => {
+                    setSkipPending(true);
+                    setUpdateTemplate(false);
                     setConfirmAt(nowS());
                     setConfirm("finish");
                   }}
@@ -350,9 +383,11 @@ export function SessionScreen() {
                     onDetails={details}
                     onRemoveSet={removeSet}
                     onRemoveExercise={removeExercise}
+                    onSkip={skipBlock}
                     onAddSet={addOne}
                     onMove={move}
                     onTickBlock={tickBlock}
+                    finished={session.finished}
                     allDone={block.sets.every((s) => isDone(s))}
                     someDone={block.sets.some((s) => isDone(s))}
                     canUp={index > 0}
@@ -386,6 +421,7 @@ export function SessionScreen() {
           <MenuItem icon={Pencil} label={t("session.rename")} onPress={() => (closeMenu(), setRename(true))} />
           <MenuItem icon={NotebookPen} label={t("session.notes")} onPress={() => (closeMenu(), setNotesOpen(true))} />
           <MenuItem icon={Plus} label={t("session.addExercise")} onPress={() => (closeMenu(), addExercise())} />
+          {!!session.routineId && <MenuItem icon={Dumbbell} label={t("session.updateTemplate")} onPress={() => (closeMenu(), void saveTemplateUpdate())} />}
           {!session.finished && <MenuItem icon={Trash2} label={t("session.discard")} danger onPress={() => (closeMenu(), setConfirm("discard"))} />}
           {session.finished && <MenuItem icon={Trash2} label={t("session.delete")} danger onPress={() => (closeMenu(), setConfirm("delete"))} />}
         </MenuPanel>
@@ -397,6 +433,16 @@ export function SessionScreen() {
         open={confirm === "finish"}
         title={empty ? t("session.emptyFinishTitle") : t("session.finishTitle")}
         body={empty ? t("session.emptyFinishBody") : `${t("session.finishBody", { sets: vm.setCount, time: clockText(Math.max(0, confirmAt - session.startTs)) })}${pending ? ` ${t("session.finishPending", { count: pending })}` : ""}`}
+        extra={
+          empty ? undefined : (
+            <>
+              {pending > 0 && (
+                <FinishOption label={t("session.skipPending")} hint={t("session.skipPendingHint", { count: pending })} value={skipPending} onChange={setSkipPending} />
+              )}
+              {!!session.routineId && <FinishOption label={t("session.updateTemplate")} hint={t("session.updateTemplateHint")} value={updateTemplate} onChange={setUpdateTemplate} />}
+            </>
+          )
+        }
         confirm={empty ? t("session.discardConfirm") : t("session.finish")}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => {
@@ -408,16 +454,19 @@ export function SessionScreen() {
           void cancelRest();
           // The rows say whether there is work, not the view model a tick behind them: an empty workout is discarded.
           const latestSets = await store.gymSets([session.id]);
-          if (!latestSets.some(isWorkSet)) {
+          if (skipPending) await skipPendingSets(store, session.id);
+          const kept = skipPending ? await store.gymSets([session.id]) : latestSets;
+          if (!kept.some(isWorkSet)) {
             await discardSession(store, session.id);
             dataChanged("gym");
             goBack();
             return;
           }
           const latest = (await store.gymSessions()).find((s) => s.id === session.id) ?? session;
-          await finishSession(store, latest, nowS());
+          const done = await finishSession(store, latest, nowS());
+          const routine = updateTemplate ? await updateRoutineFromSession(store, done, nowS()) : null;
           dataChanged("gym");
-          toast.success(t("session.saved"));
+          toast.success(routine ? t("session.savedTemplateUpdated") : t("session.saved"));
         }}
       />
       <ConfirmDialog
@@ -472,6 +521,19 @@ export function SessionScreen() {
   );
 }
 
+/** One switch in the finish dialog: skip what was not done, or make the template match today. */
+function FinishOption({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <View className="flex-row items-center gap-3 rounded-xl bg-secondary px-3 py-2.5">
+      <View className="min-w-0 flex-1">
+        <Text className="text-[14px] font-medium leading-[19px]">{label}</Text>
+        <Text className="text-[12px] leading-4 text-muted-foreground">{hint}</Text>
+      </View>
+      <Switch label={label} value={value} onValueChange={onChange} />
+    </View>
+  );
+}
+
 type Draft = Pick<GymSet, "weightKg" | "reps" | "seconds" | "distanceM">;
 
 /** One exercise: its header, the column labels and the rows. */
@@ -484,9 +546,11 @@ function BlockCard({
   onDetails,
   onRemoveSet,
   onRemoveExercise,
+  onSkip,
   onAddSet,
   onMove,
   onTickBlock,
+  finished,
   allDone,
   someDone,
   canUp,
@@ -502,10 +566,14 @@ function BlockCard({
   onDetails: (set: GymSet, patch: Pick<GymSet, "type" | "note" | "rpe">) => void;
   onRemoveSet: (set: GymSet) => void;
   onRemoveExercise: (block: Block) => void;
+  /** Skip the exercise for today: its unticked sets go, the done ones stay. */
+  onSkip: (block: Block) => void;
   onAddSet: (block: Block) => void;
   onMove: (block: Block, delta: -1 | 1) => void;
   /** Tick or untick every set of the exercise at once. */
   onTickBlock: (block: Block, on: boolean) => void;
+  /** A finished workout is read back: skipping is a tracking action, not a history edit. */
+  finished: boolean;
   allDone: boolean;
   someDone: boolean;
   canUp: boolean;
@@ -611,6 +679,7 @@ function BlockCard({
         ) : null}
         <MenuItem icon={Scale} label={t("session.changeUnit", { unit: unit === "kg" ? "LB" : "KG" })} onPress={() => (closeMenu(), void setUnit(exercise, unit === "kg" ? "lb" : "kg"))} />
         <MenuItem icon={History} label={t("exercise.history")} onPress={() => (closeMenu(), push(`/gym/exercise/${exercise.id}`))} />
+        {!finished && !allDone && <MenuItem icon={SkipForward} label={t("session.skipToday")} onPress={() => (closeMenu(), onSkip(block))} />}
         <MenuItem icon={Trash2} label={t("session.removeExercise")} danger onPress={() => (closeMenu(), setRemove(true))} />
       </MenuPanel>
 

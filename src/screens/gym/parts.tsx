@@ -227,7 +227,7 @@ export function GymEmpty({ icon, title, body, children }: { icon: LucideIcon; ti
 }
 
 /** A centred confirmation, as the journal's dismiss dialog: a modal so the back gesture keeps the screen behind it. */
-export function ConfirmDialog({ open, title, body, confirm, onCancel, onConfirm }: { open: boolean; title: string; body?: string; confirm: string; onCancel: () => void; onConfirm: () => void }) {
+export function ConfirmDialog({ open, title, body, extra, confirm, onCancel, onConfirm }: { open: boolean; title: string; body?: string; extra?: ReactNode; confirm: string; onCancel: () => void; onConfirm: () => void }) {
   const { c } = useTheme();
   const panel = usePanelStyle({ ring: "border" });
   return (
@@ -240,6 +240,7 @@ export function ConfirmDialog({ open, title, body, confirm, onCancel, onConfirm 
               {title}
             </Text>
             {!!body && <Text className="text-[14px] leading-[21px] text-foreground-secondary">{body}</Text>}
+            {extra}
           </View>
           <View className="gap-2">
             <Button onPress={onConfirm} haptic>

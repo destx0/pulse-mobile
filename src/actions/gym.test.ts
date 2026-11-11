@@ -7,7 +7,7 @@ import type { GymExercise } from "@/core/gym/types";
 import type { QueryCtx } from "@/queries/ctx";
 import { getGymExercise, getGymHome, getGymHistory, getGymSession } from "@/queries/gym";
 import type { ActionCtx } from "@/state/app";
-import { addExerciseToSession, addSet, adjustRest, deleteSet, finishSession, importStrong, moveExercise, restoreSet, restoreSets, saveRoutine, saveSessionAsRoutine, saveSet, startRest, startSession, tickSet, undoStrongImport } from "./gym";
+import { addExerciseToSession, addSet, adjustRest, deleteSet, finishSession, importStrong, moveExercise, restoreSet, restoreSets, saveRoutine, saveSessionAsRoutine, saveSet, skipExercise, skipPendingSets, startRest, startSession, tickSet, undoStrongImport, updateRoutineFromSession } from "./gym";
 
 const NOW = Date.parse("2026-11-02T09:00:00Z") / 1000;
 let store: Store;
@@ -196,6 +196,49 @@ describe("a session", () => {
     expect(home.recent).toHaveLength(0);
     expect(home.routines[0].lastTs).toBeNull();
     expect((await getGymHistory(ctx())).total).toBe(0);
+  });
+
+  it("skips one exercise for today, leaving its unticked sets out and the template alone", async () => {
+    const routine = await saveRoutine(store, { name: "Push", items: [{ exerciseId: "bench-press-barbell", sets: 3, reps: 8 }, { exerciseId: "seated-cable-row", sets: 2, reps: 10 }] }, NOW);
+    if (!routine.ok) throw new Error("routine");
+    const started = await startSession(act(), { routineId: routine.data.id });
+    if (!started.ok) throw new Error("start");
+    const bench = started.data.sets.find((s) => s.exerciseId === "bench-press-barbell");
+    await tickSet(store, bench!, true, NOW + 10);
+    const removed = await skipExercise(store, started.data.session.id, "seated-cable-row");
+    expect(removed).toHaveLength(2);
+    expect((await store.gymSets([started.data.session.id])).every((s) => s.exerciseId === "bench-press-barbell")).toBe(true);
+    expect((await store.gymRoutines()).items.filter((i) => i.routineId === routine.data.id)).toHaveLength(2);
+  });
+
+  it("skips every unfinished set before finishing", async () => {
+    const started = await startSession(act(), { name: "Push" });
+    if (!started.ok) throw new Error("start");
+    const bench = exercise("bench-press-barbell", "Bench Press (Barbell)");
+    const sets = await addExerciseToSession(store, started.data.session, bench, { count: 3, reps: 8 });
+    await tickSet(store, sets[0], true, NOW + 10);
+    expect(await skipPendingSets(store, started.data.session.id)).toBe(2);
+    const left = await store.gymSets([started.data.session.id]);
+    expect(left).toHaveLength(1);
+    expect(left[0]).toMatchObject({ completed: true, setNo: 1 });
+  });
+
+  it("updates a session's template from today, so the next session drops the old exercises", async () => {
+    const routine = await saveRoutine(store, { name: "Push", items: [{ exerciseId: "bench-press-barbell", sets: 3, reps: 8 }, { exerciseId: "seated-cable-row", sets: 2, reps: 10 }] }, NOW);
+    if (!routine.ok) throw new Error("routine");
+    const started = await startSession(act(), { routineId: routine.data.id });
+    if (!started.ok) throw new Error("start");
+    const bench = started.data.sets.filter((s) => s.exerciseId === "bench-press-barbell");
+    for (const [i, s] of bench.entries()) await tickSet(store, s, true, NOW + 10 + i);
+    await skipExercise(store, started.data.session.id, "seated-cable-row");
+    const updated = await updateRoutineFromSession(store, started.data.session, NOW + 30);
+    expect(updated).toMatchObject({ id: routine.data.id, name: "Push" });
+    const items = (await store.gymRoutines()).items.filter((i) => i.routineId === routine.data.id);
+    expect(items.map((i) => i.exerciseId)).toEqual(["bench-press-barbell"]);
+    expect(items[0]).toMatchObject({ sets: 3, reps: 8 });
+    await finishSession(store, started.data.session, NOW + 60);
+    const next = await startSession(at(NOW + 3600), { routineId: routine.data.id });
+    expect(next.ok && new Set(next.data.sets.map((s) => s.exerciseId))).toEqual(new Set(["bench-press-barbell"]));
   });
 });
 

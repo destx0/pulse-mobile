@@ -8,18 +8,22 @@ import { cardInfo } from "@/ui/shells/cardInfo";
 import { CalendarRange, Check, ChevronRight, CircleAlert, Info, Lightbulb, Maximize2, Moon, Plus, Sun, TriangleAlert } from "lucide-react-native";
 import { isDashboardKey } from "@/lib/dashboard";
 import { dashboardChoice } from "@/actions/dashboard";
+import { actionCtx, dataChanged } from "@/state/app";
 import type { QueryCtx } from "@/queries/ctx";
 import { addDays } from "@/lib/time";
-import { clock, DAY, formatDay, formatValue, MISSING, rangeLabel } from "@/lib/format";
+import { ago, clock, DAY, formatDay, formatValue, MISSING, rangeLabel } from "@/lib/format";
 import { reasonCopy } from "@/lib/reasons";
 import { activityHref, dayHref, napHref } from "@/lib/url";
 import { getHome } from "@/queries/home";
 import { dashboardKeys, getHomeDashboard, type HomeDashboard } from "@/queries/homeExtras";
+import { getHomeGym } from "@/queries/homeGym";
+import { startSession } from "@/actions/gym";
 import type { HomeVM, KeyStat, StressLevel } from "@/queries/types";
 import { EnergyBankChart } from "@/ui/charts/EnergyBankChart";
 import { StrainRecoveryChart } from "@/ui/charts/StrainRecoveryChart";
 import { StressChart } from "@/ui/charts/StressChart";
 import { cn } from "@/ui/cn";
+import { Button } from "@/ui/Button";
 import { CARD_BUTTON, CARD_CLASS, CardFill, SECONDARY_ROW, useCardStyle } from "@/ui/Card";
 import { Icon } from "@/ui/Icon";
 import { ActivityCard } from "@/ui/metrics/ActivityCard";
@@ -202,6 +206,7 @@ function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {
             <SectionShell variant="section" title={t("section.myDay")} action={<PlusKey label={vm.isToday ? t("add.today") : t("add.day", { day: formatDay(d, DAY.short) })} />}>
               <View className="gap-3">
                 {vm.outlook && <DayBanner outlook={vm.outlook} />}
+                {vm.isToday && <GymToday d={d} />}
                 <SectionShell variant="card" title={vm.activities.title} info={vm.isToday ? false : cardInfo("Activities")} action={<IconLink href="/activities" label={t("activities.all")} icon={Maximize2} />}>
                   {vm.activities.items.length || vm.activities.detected.length ? (
                     <View className="gap-1.5">
@@ -274,6 +279,45 @@ function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {
         ),
       }}
     />
+  );
+}
+
+function GymToday({ d }: { d: string }) {
+  const { t } = useTranslation("gym");
+  const { data } = useScreen(getHomeGym, ["home-gym"]);
+  const [pending, setPending] = useState(false);
+  const [now] = useState(() => Date.now());
+  if (!data) return null;
+  const { active, suggested } = data;
+  const start = async () => {
+    if (pending) return;
+    setPending(true);
+    try {
+      const res = await startSession(actionCtx(), suggested && !active ? { routineId: suggested.routineId } : {});
+      if (!res.ok) return;
+      dataChanged("gym");
+      push(`/gym/session/${res.data.session.id}`);
+    } finally {
+      setPending(false);
+    }
+  };
+  const meta = active
+    ? t("home.inProgress")
+    : suggested
+      ? `${t("card.lastDone", { when: ago(suggested.lastTs * 1000, now) })} · ${t("card.exercises", { count: suggested.exercises })}`
+      : null;
+  return (
+    <SectionShell variant="card" title={t("card.title")}>
+      <View className="gap-2">
+        <Button onPress={() => void start()} disabled={pending}>
+          {active ? t("card.resume", { name: active.name }) : suggested ? t("card.start", { name: suggested.name }) : t("card.startEmpty")}
+        </Button>
+        {!!meta && <Text className={cn(CAPTION, "text-center")}>{meta}</Text>}
+        <Button variant="secondary" onPress={() => push(`/log?kind=weight&d=${d}`)}>
+          {t("card.logWeight")}
+        </Button>
+      </View>
+    </SectionShell>
   );
 }
 
