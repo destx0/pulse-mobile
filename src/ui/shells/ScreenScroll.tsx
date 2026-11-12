@@ -60,6 +60,8 @@ export type ScreenScrollProps = {
   floatingAction?: boolean;
   /** Pull to refresh: called when the user pulls down; the spinner stays until the promise settles. Wire it to "sync now". Without it the screen has no pull-to-refresh. */
   onRefresh?: () => void | Promise<unknown>;
+  /** Detach off-screen children (default true). A TextInput-heavy page turns it off: Android reattaching a clipped row can swallow a drag. */
+  clip?: boolean;
   children: ReactNode;
 };
 
@@ -69,7 +71,7 @@ export type ScreenScrollProps = {
  * it and its fade), the check-in button floating over the foot of a detail screen, the web's pull to sync, and the keyboard:
  * the scroll view ends at its top and brings the focused field into view.
  */
-export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, onRefresh, children }: ScreenScrollProps) {
+export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, onRefresh, clip = true, children }: ScreenScrollProps) {
   const { c } = useTheme();
   const clearance = useBottomClearance();
   const { section } = useLocalSearchParams<{ section?: string }>();
@@ -117,10 +119,10 @@ export function ScreenScroll({ header, top, onScroll, bottomPad, healthspan, onR
           // Off-screen sections are detached from the native tree, so a push records only what shows. Measured on the
           // owner's phone: navigation's worst frames went from 65-77 ms to 32-36 ms (halo: 36 ms). The wrappers in
           // DetailShell pass it down; RN clips only children of views that set it.
-          removeClippedSubviews
+          removeClippedSubviews={clip}
         >
           <AnchorContext.Provider value={register}>
-            <View ref={content} collapsable={false} removeClippedSubviews>
+            <View ref={content} collapsable={false} removeClippedSubviews={clip}>
               {children}
             </View>
           </AnchorContext.Provider>

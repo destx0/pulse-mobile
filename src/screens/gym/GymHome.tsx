@@ -6,7 +6,7 @@ import { View } from "react-native";
 import { useIsFocused } from "expo-router";
 import { ChevronRight, Dumbbell, Play, Plus, Search, Trophy } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
-import { deleteRoutine as removeRoutine, startSession } from "@/actions/gym";
+import { deleteRoutine as removeRoutine, reorderRoutines, startSession } from "@/actions/gym";
 import { loadText, toUnit } from "@/core/gym/load";
 import type { GymHomeVM } from "@/queries/gym";
 import { getGymHome, getGymSession } from "@/queries/gym";
@@ -22,6 +22,7 @@ import { push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
 import { Block, ConfirmDialog, GymEmpty, HeaderAction, SessionRow, StatTile, TemplateCard, clockText, lengthText, useNow, volumeText } from "./parts";
 import { GymSkeleton } from "./GymSkeleton";
+import { ReorderSheet } from "./ReorderSheet";
 import { QueryError } from "@/ui/shells/QueryError";
 
 export function GymHome() {
@@ -29,6 +30,7 @@ export function GymHome() {
   const { data, error, reload } = useScreen(getGymHome, ["gym-home"]);
   const [pending, setPending] = useState(false);
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
+  const [reordering, setReordering] = useState(false);
   const active = data?.active;
 
   // The workout page starts its read on the tap, in parallel with the slide, so its sets are there when it lands.
@@ -99,6 +101,7 @@ export function GymHome() {
                     onStart={() => void start(card.routine.id)}
                     onEdit={() => push(`/gym/routine/${card.routine.id}`)}
                     onDelete={() => setRemoving({ id: card.routine.id, name: card.routine.name })}
+                    onReorder={() => setReordering(true)}
                   />
                 ))}
               </View>
@@ -200,6 +203,16 @@ export function GymHome() {
           await removeRoutine(actionCtx().store, removing.id);
           setRemoving(null);
           dataChanged("gym");
+        }}
+      />
+      <ReorderSheet
+        open={reordering}
+        title={t("reorder.templates")}
+        items={(data?.routines ?? []).map((card) => ({ id: card.routine.id, label: card.routine.name, meta: t("card.exercises", { count: card.items.length }) }))}
+        onClose={() => setReordering(false)}
+        onDone={(ordered) => {
+          setReordering(false);
+          void reorderRoutines(actionCtx().store, ordered, Math.floor(Date.now() / 1000)).then(() => dataChanged("gym"));
         }}
       />
     </PageShell>

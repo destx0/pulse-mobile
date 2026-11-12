@@ -7,7 +7,7 @@ import type { GymExercise } from "@/core/gym/types";
 import type { QueryCtx } from "@/queries/ctx";
 import { getGymExercise, getGymHome, getGymHistory, getGymSession } from "@/queries/gym";
 import type { ActionCtx } from "@/state/app";
-import { addExerciseToSession, addSet, adjustRest, deleteSet, finishSession, importStrong, moveExercise, restoreSet, restoreSets, saveRoutine, saveSessionAsRoutine, saveSet, skipExercise, skipPendingSets, startRest, startSession, tickSet, undoStrongImport, updateRoutineFromSession } from "./gym";
+import { addExerciseToSession, addSet, adjustRest, deleteSet, finishSession, importStrong, moveExercise, reorderExercises, reorderRoutines, restoreSet, restoreSets, saveRoutine, saveSessionAsRoutine, saveSet, skipExercise, skipPendingSets, startRest, startSession, tickSet, undoStrongImport, updateRoutineFromSession } from "./gym";
 
 const NOW = Date.parse("2026-11-02T09:00:00Z") / 1000;
 let store: Store;
@@ -327,5 +327,28 @@ describe("the import", () => {
     expect(push?.routineId).toBe(routine.data.id);
     const home = await getGymHome(ctx());
     expect(home.routines.find((r) => r.routine.name === "Push")?.lastTs).not.toBeNull();
+  });
+});
+
+describe("reordering", () => {
+  it("writes a template order", async () => {
+    const a = await saveRoutine(store, { name: "A", items: [{ exerciseId: "squat-barbell", sets: 1, reps: 5 }] }, NOW);
+    const b = await saveRoutine(store, { name: "B", items: [{ exerciseId: "bench-press-barbell", sets: 1, reps: 5 }] }, NOW + 1);
+    if (!a.ok || !b.ok) throw new Error("routine");
+    await reorderRoutines(store, [b.data.id, a.data.id], NOW + 2);
+    expect((await store.gymRoutines()).routines.map((r) => r.name)).toEqual(["B", "A"]);
+  });
+
+  it("takes every set with its exercise", async () => {
+    const started = await startSession(act(), { name: "Legs" });
+    if (!started.ok) throw new Error("start");
+    const squat = exercise("squat-barbell", "Squat");
+    const bench = exercise("bench-press-barbell", "Bench");
+    await addExerciseToSession(store, started.data.session, squat, { count: 2, reps: 5 });
+    await addExerciseToSession(store, started.data.session, bench, { count: 2, reps: 5 });
+    await reorderExercises(store, started.data.session.id, [bench.id, squat.id]);
+    const sets = await store.gymSets([started.data.session.id]);
+    expect(sets.filter((s) => s.position === 0).map((s) => s.exerciseId)).toEqual([bench.id, bench.id]);
+    expect(sets.filter((s) => s.position === 1).map((s) => s.exerciseId)).toEqual([squat.id, squat.id]);
   });
 });

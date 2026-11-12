@@ -82,6 +82,9 @@
     "previous": "Previous",
     "usePrevious": "Use the previous numbers",
     "allSets": "All sets",
+    "tickAll": "Tick all",
+    "untickAll": "Untick all",
+    "reorder": "Reorder exercises",
     "lastDone": "Last done {{when}}",
     "set": "Set",
     "setDetails": "Set {{number}}",
@@ -124,8 +127,15 @@
     "supersetWith": "Superset with {{name}}",
     "removeSuperset": "Remove superset"
   },
+  "reorder": {
+    "templates": "Reorder templates",
+    "exercises": "Reorder exercises",
+    "hint": "Hold a row and drag it into place.",
+    "done": "Done"
+  },
   "routine": {
     "new": "New template",
+    "reorder": "Reorder templates",
     "notFound": "This template was deleted",
     "notFoundBody": "Open the Gym tab to build another.",
     "name": "Template name",

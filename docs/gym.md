@@ -56,6 +56,19 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
 - **Home does not offer today's workout twice.** Once a workout is finished, Home's card shows it as done for the rest of
   the day (name and how long ago, no Start); the next template is suggested tomorrow. Log weight stays on the card.
 
+## Gestures
+
+- **A template** swipes right to start it, or left for Edit and Delete. Hold it to reorder the templates: the sheet opens
+  with the list, and a held row follows the finger past its neighbours. Keep the three-dot menu for the same actions.
+- **An exercise** in a workout swipes right to tick or untick all its sets, or left to skip it for today or remove it.
+  Hold its name to reorder the workout's exercises. The long press does not fire when the finger moves, so the page still
+  scrolls under it.
+- **A set** keeps its long press: the set details (warmup, drop, failure, RPE, note, delete) open without hunting for the
+  number. The green row (above) shows what is done.
+- **The workout page keeps its rows attached while scrolling.** Android's clipped-subview pass detaches and reattaches
+  TextInput rows, which can swallow a drag on a long workout; that page opts out (`clipBody={false}` in
+  `DetailShell`).
+
 ## Data
 
 Six tables in the one SQLite file (`src/data/db.ts`), all behind the `Store` interface:

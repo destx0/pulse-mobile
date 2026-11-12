@@ -326,6 +326,13 @@ export async function moveExercise(store: Store, sessionId: string, exerciseId: 
   );
 }
 
+/** Sets a workout's exercises in the given order, taking every set with its exercise. */
+export async function reorderExercises(store: Store, sessionId: string, ordered: string[]): Promise<void> {
+  const at = new Map(ordered.map((id, position) => [id, position]));
+  const sets = await store.gymSets([sessionId]);
+  await store.putGymSets(sets.map((s) => ({ ...s, position: at.get(s.exerciseId) ?? s.position })));
+}
+
 /**
  * Ties two exercises of a session into a superset (no rest between them) by giving their sets one id, or unties them
  * with `supersetId: null`. The partner is the exercise's sets, so the badge follows every set of both.
@@ -368,6 +375,17 @@ export async function saveRoutine(store: Store, input: RoutineInput, now: number
 
 export async function deleteRoutine(store: Store, id: string): Promise<void> {
   await store.deleteGymRoutine(id);
+}
+
+/** Sets the templates' order, each keeping its planned exercises. */
+export async function reorderRoutines(store: Store, ordered: string[], now: number): Promise<void> {
+  const at = new Map(ordered.map((id, position) => [id, position]));
+  const { routines, items } = await store.gymRoutines();
+  for (const routine of routines) {
+    const position = at.get(routine.id);
+    if (position === undefined || position === routine.position) continue;
+    await store.putGymRoutine({ ...routine, position, updatedAt: now }, items.filter((i) => i.routineId === routine.id));
+  }
 }
 
 /** A session's working exercises as template rows: each exercise's set count and its most common reps. */

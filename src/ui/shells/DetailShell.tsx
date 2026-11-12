@@ -60,9 +60,11 @@ export type DetailShellProps = {
   loading?: boolean;
   /** A static page with nothing to read: its body draws in the first frame instead of waiting for the slide to end. */
   instant?: boolean;
+  /** Detach off-screen sections (default true). A TextInput-heavy page turns it off (see ScreenScroll). */
+  clipBody?: boolean;
 };
 
-export function DetailShell({ title, titleClassName, subtitle, info, onBack, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction }: DetailShellProps) {
+export function DetailShell({ title, titleClassName, subtitle, info, onBack, backHref, dateSwitcher, dismiss, align, titleIcon, action, ground, hero, stats, collapse, summary, notch, insight, primary, secondary, footer, bodySkeleton, loading, instant, onRefresh, floatingAction, clipBody = true }: DetailShellProps) {
   const insets = useSafeAreaInsets();
   const side = summary ?? (hero ? insight : null);
   const inHeader = dateSwitcher?.placement === "header";
@@ -85,15 +87,15 @@ export function DetailShell({ title, titleClassName, subtitle, info, onBack, bac
   const header = compact ? <CollapsingHeader {...headerProps} compact={compact} stats={stats} progress={progress} onHeight={setHeaderHeight} /> : <DetailHeader {...headerProps} onHeight={setHeaderHeight} />;
 
   return (
-    <ScreenScroll header={header} top={headerHeight} onScroll={onScroll} healthspan={ground === "healthspan"} floatingAction={floatingAction} onRefresh={onRefresh ?? shellSync?.syncNow}>
-      {body && <View removeClippedSubviews className="w-full px-4 pt-2" accessibilityState={{ busy: !!loading }}>
+    <ScreenScroll header={header} top={headerHeight} onScroll={onScroll} healthspan={ground === "healthspan"} floatingAction={floatingAction} onRefresh={onRefresh ?? shellSync?.syncNow} clip={clipBody}>
+      {body && <View removeClippedSubviews={clipBody} className="w-full px-4 pt-2" accessibilityState={{ busy: !!loading }}>
         {loading && <Text accessibilityLiveRegion="polite" className="absolute h-px w-px opacity-0">{title.trim() ? i18n.t("ui:loadingTitle", { title }) : i18n.t("common:loading")}</Text>}
         {dateSwitcher && !inHeader && (
           <View className="mb-6 items-center">
             <DateSwitcher {...dateSwitcher} placement="header" />
           </View>
         )}
-        <View removeClippedSubviews className="gap-8">
+        <View removeClippedSubviews={clipBody} className="gap-8">
           {!!(hero || side) && (
             <View className="gap-6">
               {!!hero && (
@@ -121,9 +123,9 @@ export function DetailShell({ title, titleClassName, subtitle, info, onBack, bac
           )}
           {!!(summary || !hero) && insight}
           {below ? (
-            <Animated.View removeClippedSubviews entering={fade ? FadeIn.duration(DURATION.base) : undefined} className="gap-8">
+            <Animated.View removeClippedSubviews={clipBody} entering={fade ? FadeIn.duration(DURATION.base) : undefined} className="gap-8">
               {primary}
-              {secondary && secondary.length > 0 && <View removeClippedSubviews className="gap-3">{Children.toArray(secondary)}</View>}
+              {secondary && secondary.length > 0 && <View removeClippedSubviews={clipBody} className="gap-3">{Children.toArray(secondary)}</View>}
               {footer}
             </Animated.View>
           ) : (

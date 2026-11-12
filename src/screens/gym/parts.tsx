@@ -17,8 +17,10 @@ import { usePanelStyle } from "@/ui/Panel";
 import { useTheme } from "@/ui/theme";
 import { Press } from "@/ui/Press";
 import { Text } from "@/ui/Text";
+import { haptic } from "@/ui/haptics";
 import { ago, DAY, formatDay } from "@/lib/format";
 import type { RoutineCard, SessionCard } from "@/queries/gym";
+import { SwipeActions } from "./SwipeActions";
 
 /** "0:06", "12:40", "1:02:03": the workout timer. */
 export function clockText(seconds: number): string {
@@ -90,7 +92,7 @@ export function StatTile({ label, value, aside }: { label: string; value: string
 }
 
 /** A template in the grid: its name, what it holds ("5 × Lat Pulldown (Cable), 5 × …") and when it was last done. */
-export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: RoutineCard; onStart: () => void; onEdit: () => void; onDelete: () => void }) {
+export function TemplateCard({ card, onStart, onEdit, onDelete, onReorder }: { card: RoutineCard; onStart: () => void; onEdit: () => void; onDelete: () => void; onReorder: () => void }) {
   const { t } = useTranslation("gym");
   const [now] = useState(() => Math.floor(Date.now() / 1000));
   const cardStyle = useCardStyle();
@@ -109,32 +111,53 @@ export function TemplateCard({ card, onStart, onEdit, onDelete }: { card: Routin
   })();
   return (
     <>
-      <Press activeScale={0.97} accessibilityRole="button" accessibilityLabel={card.routine.name} onPress={onStart} className={cn(CARD_CLASS, "w-full p-4")} style={cardStyle}>
-        <View className="gap-2">
-          <View className="flex-row items-start justify-between gap-2">
-            <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
-              {card.routine.name}
+      <SwipeActions
+        left={[{ label: t("home.startTemplate"), icon: Play, tone: "accent", onPress: onStart }]}
+        right={[
+          { label: t("routine.edit"), icon: Pencil, onPress: onEdit },
+          { label: t("routine.delete"), icon: Trash2, tone: "danger", onPress: onDelete },
+        ]}
+      >
+        <Press
+          activeScale={0.97}
+          accessibilityRole="button"
+          accessibilityLabel={card.routine.name}
+          accessibilityHint={t("routine.reorder")}
+          onPress={onStart}
+          onLongPress={() => {
+            haptic.select();
+            onReorder();
+          }}
+          delayLongPress={350}
+          className={cn(CARD_CLASS, "w-full p-4")}
+          style={cardStyle}
+        >
+          <View className="gap-2">
+            <View className="flex-row items-start justify-between gap-2">
+              <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
+                {card.routine.name}
+              </Text>
+              <View ref={menuRef} collapsable={false}>
+                <Press accessibilityRole="button" accessibilityLabel={t("menu.template")} hitSlop={12} onPress={openMenu} className="-my-1 size-8 items-center justify-center">
+                  <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
+                </Press>
+              </View>
+            </View>
+            <Text className="text-[13px] leading-[18px] text-foreground-secondary" numberOfLines={3}>
+              {summary}
             </Text>
-            <View ref={menuRef} collapsable={false}>
-              <Press accessibilityRole="button" accessibilityLabel={t("menu.template")} hitSlop={12} onPress={openMenu} className="-my-1 size-8 items-center justify-center">
-                <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
-              </Press>
+          </View>
+          <View className="mt-2 flex-row items-center justify-between gap-2">
+            <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
+              <Icon icon={Clock} size={12} tone="muted-foreground" />
+              <Text className="text-[12px] leading-4 text-muted-foreground">{whenText(card.lastTs, now) || t("home.neverDone")}</Text>
+            </View>
+            <View className="size-9 items-center justify-center rounded-full border border-border bg-secondary">
+              <Icon icon={Play} size={16} tone="strain-text" />
             </View>
           </View>
-          <Text className="text-[13px] leading-[18px] text-foreground-secondary" numberOfLines={3}>
-            {summary}
-          </Text>
-        </View>
-        <View className="mt-2 flex-row items-center justify-between gap-2">
-          <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
-            <Icon icon={Clock} size={12} tone="muted-foreground" />
-            <Text className="text-[12px] leading-4 text-muted-foreground">{whenText(card.lastTs, now) || t("home.neverDone")}</Text>
-          </View>
-          <View className="size-9 items-center justify-center rounded-full border border-border bg-secondary">
-            <Icon icon={Play} size={16} tone="strain-text" />
-          </View>
-        </View>
-      </Press>
+        </Press>
+      </SwipeActions>
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
         <MenuItem icon={Play} label={t("home.startTemplate")} onPress={() => (closeMenu(), onStart())} />
         <MenuItem icon={Pencil} label={t("routine.edit")} onPress={() => (closeMenu(), onEdit())} />

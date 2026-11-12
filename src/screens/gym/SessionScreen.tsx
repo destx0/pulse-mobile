@@ -10,7 +10,7 @@ import { useLocalSearchParams, useIsFocused } from "expo-router";
 import { ArrowDown, ArrowUp, Check, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, SkipForward, Trash2 } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
-import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, skipExercise, skipPendingSets, stopRest, updateRoutineFromSession, updateSession } from "@/actions/gym";
+import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, reorderExercises, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, skipExercise, skipPendingSets, stopRest, updateRoutineFromSession, updateSession } from "@/actions/gym";
 import { cancelRest, scheduleRest } from "@/background/notify";
 import { fromUnit, loadText } from "@/core/gym/load";
 import { isWorkSet } from "@/core/gym/stats";
@@ -34,6 +34,8 @@ import { Input } from "@/screens/log/fields";
 import { goBack, push } from "@/ui/navigate";
 import { useTheme } from "@/ui/theme";
 import { ConfirmDialog, GymEmpty, MenuItem, StatTile, clockText, lengthText, useNow, volumeText } from "./parts";
+import { SwipeActions } from "./SwipeActions";
+import { ReorderSheet } from "./ReorderSheet";
 import { Switch } from "@/screens/settings/controls";
 import { QueryError } from "@/ui/shells/QueryError";
 
@@ -51,6 +53,7 @@ export function SessionScreen() {
   const [confirmAt, setConfirmAt] = useState(0);
   const [rename, setRename] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [reordering, setReordering] = useState(false);
   // The rows an Undo has just put back: they pulse once, so the eye finds where they landed.
   const [flash, setFlash] = useState<{ ids: string[]; at: number } | null>(null);
   const flashAt = useRef(0);
@@ -302,6 +305,7 @@ export function SessionScreen() {
           floatingAction={false}
           // A workout is opened to be used, not watched slide in: its sets draw in the first frame.
           instant
+          clipBody={false}
           backHref="/gym"
           action={
             <View className="flex-row items-center gap-2">
@@ -387,6 +391,7 @@ export function SessionScreen() {
                     onAddSet={addOne}
                     onMove={move}
                     onTickBlock={tickBlock}
+                    onReorder={() => setReordering(true)}
                     finished={session.finished}
                     allDone={block.sets.every((s) => isDone(s))}
                     someDone={block.sets.some((s) => isDone(s))}
@@ -487,6 +492,16 @@ export function SessionScreen() {
           if (was) goBack();
         }}
       />
+      <ReorderSheet
+        open={reordering}
+        title={t("reorder.exercises")}
+        items={vm.blocks.map((block) => ({ id: block.exercise.id, label: block.exercise.name, meta: t("session.setsCount", { count: block.sets.length }) }))}
+        onClose={() => setReordering(false)}
+        onDone={(ordered) => {
+          setReordering(false);
+          void reorderExercises(store, session.id, ordered).then(() => dataChanged("gym"));
+        }}
+      />
       {rename && (
         <RenameDialog
           initial={session.name}
@@ -550,6 +565,7 @@ function BlockCard({
   onAddSet,
   onMove,
   onTickBlock,
+  onReorder,
   finished,
   allDone,
   someDone,
@@ -572,6 +588,8 @@ function BlockCard({
   onMove: (block: Block, delta: -1 | 1) => void;
   /** Tick or untick every set of the exercise at once. */
   onTickBlock: (block: Block, on: boolean) => void;
+  /** Long press on the exercise name: reorder the workout's exercises. */
+  onReorder: () => void;
   /** A finished workout is read back: skipping is a tracking action, not a history edit. */
   finished: boolean;
   allDone: boolean;
@@ -601,129 +619,147 @@ function BlockCard({
   const delta = allTicked && lastVolume > 0 && nowVolume > 0 ? Math.round(((nowVolume - lastVolume) / lastVolume) * 100) : null;
 
   return (
-    <Card className="px-3 py-4">
-      <CardFill />
-      <View className="mb-3 flex-row items-center gap-2 px-1">
-        <Press accessibilityRole="link" onPress={() => push(`/gym/exercise/${exercise.id}`)} className="min-w-0 flex-1 flex-row items-center gap-1.5">
-          <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
-            {exercise.name}
-          </Text>
-        </Press>
-        {!!supersetId && (
-          <View className="h-5 items-center justify-center rounded-full bg-secondary px-2">
-            <Text className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground">{t("session.superset")}</Text>
+    <SwipeActions
+      left={[{ label: allDone ? t("session.untickAll") : t("session.tickAll"), icon: Check, tone: allDone ? "neutral" : "accent", onPress: () => onTickBlock(block, !allDone) }]}
+      right={[
+        ...(finished || allDone ? [] : [{ label: t("session.skipToday"), icon: SkipForward, onPress: () => onSkip(block) }]),
+        { label: t("session.removeExercise"), icon: Trash2, tone: "danger" as const, onPress: () => setRemove(true) },
+      ]}
+    >
+      <Card className="px-3 py-4">
+        <CardFill />
+        <View className="mb-3 flex-row items-center gap-2 px-1">
+          <Press
+            accessibilityRole="link"
+            accessibilityHint={t("session.reorder")}
+            onPress={() => push(`/gym/exercise/${exercise.id}`)}
+            onLongPress={() => {
+              haptic.select();
+              onReorder();
+            }}
+            delayLongPress={350}
+            className="min-w-0 flex-1 flex-row items-center gap-1.5"
+          >
+            <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
+              {exercise.name}
+            </Text>
+          </Press>
+          {!!supersetId && (
+            <View className="h-5 items-center justify-center rounded-full bg-secondary px-2">
+              <Text className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted-foreground">{t("session.superset")}</Text>
+            </View>
+          )}
+          {delta != null && delta !== 0 && <Text className={cn("font-numeric text-[12px] font-semibold tabular-nums", delta > 0 ? "text-strain-text" : "text-recovery-red-text")}>{`${delta > 0 ? "+" : ""}${delta}%`}</Text>}
+          <View ref={menuRef} collapsable={false}>
+            <Press accessibilityRole="button" accessibilityLabel={t("session.exerciseMenu")} onPress={openMenu} className="size-11 items-center justify-center">
+              <Icon icon={MoreHorizontal} size={20} tone="muted-foreground" />
+            </Press>
           </View>
-        )}
-        {delta != null && delta !== 0 && <Text className={cn("font-numeric text-[12px] font-semibold tabular-nums", delta > 0 ? "text-strain-text" : "text-recovery-red-text")}>{`${delta > 0 ? "+" : ""}${delta}%`}</Text>}
-        <View ref={menuRef} collapsable={false}>
-          <Press accessibilityRole="button" accessibilityLabel={t("session.exerciseMenu")} onPress={openMenu} className="size-11 items-center justify-center">
-            <Icon icon={MoreHorizontal} size={20} tone="muted-foreground" />
+        </View>
+
+        <View className="mb-2 flex-row items-center gap-3 px-1">
+          <Text className="w-8 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.set")}</Text>
+          <Text className="w-[74px] text-right text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.previous")}</Text>
+          <View className="flex-1 flex-row items-center gap-2">
+            {hold && <View className="flex-1" />}
+            <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.km") : hold ? t("session.sec") : unit === "lb" ? t("session.lb") : t("session.kg")}</Text>
+            {!hold && <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.min") : t("session.reps")}</Text>}
+          </View>
+          <Press
+            accessibilityRole="button"
+            accessibilityState={{ checked: allDone }}
+            accessibilityLabel={t("session.allSets")}
+            onPress={() => onTickBlock(block, !allDone)}
+            className="h-11 w-11 items-center justify-center"
+          >
+            <View className={cn("size-6 items-center justify-center rounded-full", allDone ? "border border-optimal bg-optimal" : "border border-muted-foreground")}>
+              {allDone ? (
+                <Icon icon={Check} size={13} tone="background" strokeWidth={2.6} />
+              ) : someDone ? (
+                <View className="h-0.5 w-3 rounded-full bg-muted-foreground" />
+              ) : null}
+            </View>
           </Press>
         </View>
-      </View>
 
-      <View className="mb-2 flex-row items-center gap-3 px-1">
-        <Text className="w-8 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.set")}</Text>
-        <Text className="w-[74px] text-right text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{t("session.previous")}</Text>
-        <View className="flex-1 flex-row items-center gap-2">
-          {hold && <View className="flex-1" />}
-          <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.km") : hold ? t("session.sec") : unit === "lb" ? t("session.lb") : t("session.kg")}</Text>
-          {!hold && <Text className="flex-1 text-center text-[11px] font-semibold uppercase leading-4 tracking-[0.1em] text-muted-foreground">{cardio ? t("session.min") : t("session.reps")}</Text>}
+        <View>
+          {block.sets.map((set, i) => (
+            <SetRow
+              key={set.id}
+              set={set}
+              prev={block.prev[i] ?? null}
+              unit={unit}
+              cardio={cardio}
+              hold={hold}
+              pr={prSetIds.includes(set.id)}
+              flashAt={flash?.ids.includes(set.id) ? flash.at : 0}
+              onSave={(d, completed) => onSave(set, d, completed)}
+              onTick={(d, on) => onTick(set, d, on)}
+              onMenu={() => setNoting(set)}
+            />
+          ))}
         </View>
-        <Press
-          accessibilityRole="button"
-          accessibilityState={{ checked: allDone }}
-          accessibilityLabel={t("session.allSets")}
-          onPress={() => onTickBlock(block, !allDone)}
-          className="h-11 w-11 items-center justify-center"
-        >
-          <View className={cn("size-6 items-center justify-center rounded-full", allDone ? "border border-optimal bg-optimal" : "border border-muted-foreground")}>
-            {allDone ? (
-              <Icon icon={Check} size={13} tone="background" strokeWidth={2.6} />
-            ) : someDone ? (
-              <View className="h-0.5 w-3 rounded-full bg-muted-foreground" />
-            ) : null}
-          </View>
+
+        <Press accessibilityRole="button" onPress={() => onAddSet(block)} className="mt-1 h-11 items-center justify-center">
+          <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-foreground-secondary">{t("session.addSet")}</Text>
         </Press>
-      </View>
 
-      <View>
-        {block.sets.map((set, i) => (
-          <SetRow
-            key={set.id}
-            set={set}
-            prev={block.prev[i] ?? null}
-            unit={unit}
-            cardio={cardio}
-            hold={hold}
-            pr={prSetIds.includes(set.id)}
-            flashAt={flash?.ids.includes(set.id) ? flash.at : 0}
-            onSave={(d, completed) => onSave(set, d, completed)}
-            onTick={(d, on) => onTick(set, d, on)}
-            onMenu={() => setNoting(set)}
-          />
-        ))}
-      </View>
+        <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
+          {canUp && <MenuItem icon={ArrowUp} label={t("session.moveUp")} onPress={() => (closeMenu(), onMove(block, -1))} />}
+          {canDown && <MenuItem icon={ArrowDown} label={t("session.moveDown")} onPress={() => (closeMenu(), onMove(block, 1))} />}
+          {supersetId ? (
+            <MenuItem icon={Scale} label={t("session.removeSuperset")} onPress={() => (closeMenu(), onSuperset(block, null, false))} />
+          ) : next ? (
+            <MenuItem icon={Plus} label={t("session.supersetWith", { name: next.exercise.name })} onPress={() => (closeMenu(), onSuperset(block, next, true))} />
+          ) : null}
+          <MenuItem icon={Scale} label={t("session.changeUnit", { unit: unit === "kg" ? "LB" : "KG" })} onPress={() => (closeMenu(), void setUnit(exercise, unit === "kg" ? "lb" : "kg"))} />
+          <MenuItem icon={History} label={t("exercise.history")} onPress={() => (closeMenu(), push(`/gym/exercise/${exercise.id}`))} />
+          {!finished && !allDone && <MenuItem icon={SkipForward} label={t("session.skipToday")} onPress={() => (closeMenu(), onSkip(block))} />}
+          <MenuItem icon={Trash2} label={t("session.removeExercise")} danger onPress={() => (closeMenu(), setRemove(true))} />
+        </MenuPanel>
 
-      <Press accessibilityRole="button" onPress={() => onAddSet(block)} className="mt-1 h-11 items-center justify-center">
-        <Text className="text-[12px] font-bold uppercase tracking-[0.1em] text-foreground-secondary">{t("session.addSet")}</Text>
-      </Press>
-
-      <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
-        {canUp && <MenuItem icon={ArrowUp} label={t("session.moveUp")} onPress={() => (closeMenu(), onMove(block, -1))} />}
-        {canDown && <MenuItem icon={ArrowDown} label={t("session.moveDown")} onPress={() => (closeMenu(), onMove(block, 1))} />}
-        {supersetId ? (
-          <MenuItem icon={Scale} label={t("session.removeSuperset")} onPress={() => (closeMenu(), onSuperset(block, null, false))} />
-        ) : next ? (
-          <MenuItem icon={Plus} label={t("session.supersetWith", { name: next.exercise.name })} onPress={() => (closeMenu(), onSuperset(block, next, true))} />
-        ) : null}
-        <MenuItem icon={Scale} label={t("session.changeUnit", { unit: unit === "kg" ? "LB" : "KG" })} onPress={() => (closeMenu(), void setUnit(exercise, unit === "kg" ? "lb" : "kg"))} />
-        <MenuItem icon={History} label={t("exercise.history")} onPress={() => (closeMenu(), push(`/gym/exercise/${exercise.id}`))} />
-        {!finished && !allDone && <MenuItem icon={SkipForward} label={t("session.skipToday")} onPress={() => (closeMenu(), onSkip(block))} />}
-        <MenuItem icon={Trash2} label={t("session.removeExercise")} danger onPress={() => (closeMenu(), setRemove(true))} />
-      </MenuPanel>
-
-      <ConfirmDialog
-        open={remove}
-        title={t("session.removeExercise")}
-        body={t("session.removeExerciseBody", { count: block.sets.length })}
-        confirm={t("session.removeExercise")}
-        onCancel={() => setRemove(false)}
-        onConfirm={() => {
-          setRemove(false);
-          onRemoveExercise(block);
-        }}
-      />
-      {noting && (
-        <NoteDialog
-          number={noting.setNo}
-          initial={noting.note ?? ""}
-          type={noting.type}
-          rpe={noting.rpe}
-          onClose={() => setNoting(null)}
-          onSave={(type, note, rpe) => {
-            onDetails(noting, { type, note, rpe });
-            setNoting(null);
-          }}
-          onDelete={() => {
-            onRemoveSet(noting);
-            setNoting(null);
+        <ConfirmDialog
+          open={remove}
+          title={t("session.removeExercise")}
+          body={t("session.removeExerciseBody", { count: block.sets.length })}
+          confirm={t("session.removeExercise")}
+          onCancel={() => setRemove(false)}
+          onConfirm={() => {
+            setRemove(false);
+            onRemoveExercise(block);
           }}
         />
-      )}
-      {/* A note or an RPE on any set shows under the exercise: the file's notes, and the ones typed here. */}
-      {block.sets.some((s) => s.note || s.rpe) && (
-        <View className="mt-1 gap-1 px-1">
-          {block.sets
-            .filter((s) => s.note || s.rpe)
-            .map((s) => (
-              <Text key={s.id} className="text-[12px] leading-4 text-muted-foreground" onPress={() => setNoting(s)}>
-                {`${s.setNo}. ${[s.note, s.rpe ? `${t("session.rpe")} ${s.rpe}` : null].filter(Boolean).join(" · ")}`}
-              </Text>
-            ))}
-        </View>
-      )}
-    </Card>
+        {noting && (
+          <NoteDialog
+            number={noting.setNo}
+            initial={noting.note ?? ""}
+            type={noting.type}
+            rpe={noting.rpe}
+            onClose={() => setNoting(null)}
+            onSave={(type, note, rpe) => {
+              onDetails(noting, { type, note, rpe });
+              setNoting(null);
+            }}
+            onDelete={() => {
+              onRemoveSet(noting);
+              setNoting(null);
+            }}
+          />
+        )}
+        {/* A note or an RPE on any set shows under the exercise: the file's notes, and the ones typed here. */}
+        {block.sets.some((s) => s.note || s.rpe) && (
+          <View className="mt-1 gap-1 px-1">
+            {block.sets
+              .filter((s) => s.note || s.rpe)
+              .map((s) => (
+                <Text key={s.id} className="text-[12px] leading-4 text-muted-foreground" onPress={() => setNoting(s)}>
+                  {`${s.setNo}. ${[s.note, s.rpe ? `${t("session.rpe")} ${s.rpe}` : null].filter(Boolean).join(" · ")}`}
+                </Text>
+              ))}
+          </View>
+        )}
+      </Card>
+    </SwipeActions>
   );
 }
 
