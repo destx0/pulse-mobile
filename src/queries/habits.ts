@@ -18,8 +18,6 @@ export type HabitsVM = {
   today: string;
   habits: HabitCardVM[];
   archived: HabitCardVM[];
-  /** Habits whose current period is met, and the active habits that count. */
-  summary: { done: number; total: number };
 };
 
 /** The cards for a set of habits and their entries: the tab, and the widget that lists today. */
@@ -42,12 +40,10 @@ export async function getHabits(ctx: QueryCtx): Promise<HabitsVM> {
   const active = habits.filter((h) => !h.archived);
   const archived = habits.filter((h) => h.archived);
   const cards = habitCards(active, entries, ctx.today);
-  const due = cards.filter((c) => c.stats.scheduled);
   return {
     today: ctx.today,
     habits: cards,
     archived: habitCards(archived, entries, ctx.today),
-    summary: { done: due.filter((c) => c.stats.done).length, total: due.length },
   };
 }
 

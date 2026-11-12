@@ -44,8 +44,8 @@ change to the formula would make stale.
 
 ## Screens
 
-- `/habits` — the summary and one card per habit: strength ring, today's tick, the last seven days, a menu for edit,
-  skip, archive and delete. Tapping a day ticks it (yes/no) or opens the amount dialog (numeric). Under the habits, the
+- `/habits` — one card per habit: icon, name, period progress and streak, the last seven days, a menu for edit, skip,
+  archive and delete. Tapping a day ticks it (yes/no) or opens the amount dialog (numeric). Under the habits, the
   **Food orders** card counts the delivery confirmations read from SMS (`docs/food-orders.md`).
 - `/habits/[id]` — the large strength ring, current and best streaks, the last 20 weeks as a calendar, the 90-day score
   curve, the question and notes.

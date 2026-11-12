@@ -68,7 +68,7 @@ export function FoodOrdersCard() {
   }, []);
 
   if (!data) return null;
-  const { week, last, days } = data;
+  const { week, last } = data;
   const lastLine = last
     ? t("food.last", { merchant: last.merchant, day: formatDay(last.day, { month: "short", day: "numeric" }) })
     : t("food.emptyBody");
@@ -77,6 +77,7 @@ export function FoodOrdersCard() {
     <SectionShell
       variant="card"
       title={t("food.title")}
+      info={{ title: t("food.title"), body: t("food.source") }}
       action={
         <Press accessibilityRole="button" accessibilityLabel={t("food.scan")} disabled={scanning} onPress={() => void scan(true)} hitSlop={10} className="flex-row items-center gap-1.5">
           <Icon icon={Utensils} size={14} tone="foreground-secondary" />
@@ -84,27 +85,14 @@ export function FoodOrdersCard() {
         </Press>
       }
     >
-      <View className="gap-4">
+      <View className="gap-2.5">
         <View className="flex-row items-end gap-2">
-          <Text className="font-numeric text-3xl font-bold leading-8 tabular-nums">{week}</Text>
-          <Text className={cn(CAPTION, "pb-1")}>{t("food.thisWeek", { count: week })}</Text>
+          <Text className="font-numeric text-2xl font-bold leading-7 tabular-nums">{week}</Text>
+          <Text className={cn(CAPTION, "pb-0.5")}>{t("food.thisWeek", { count: week })}</Text>
         </View>
-        <View className="flex-row justify-between">
-          {days.map((d) => (
-            <View key={d.day} className="items-center gap-1.5">
-              <Text className={cn("text-[10px] font-semibold uppercase leading-3 tracking-[0.04em]", d.day === days[days.length - 1]?.day ? "text-foreground" : "text-muted-foreground")}>
-                {formatDay(d.day, { weekday: "narrow" })}
-              </Text>
-              <View className={cn("size-9 items-center justify-center rounded-full", d.count > 0 ? "bg-optimal/15" : "bg-secondary")}>
-                <Text className={cn("font-numeric text-[13px] font-semibold leading-4", d.count > 0 ? "text-optimal-text" : "text-muted-foreground")}>{d.count || "·"}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-        <Text className={CAPTION} numberOfLines={2}>
+        <Text className={CAPTION} numberOfLines={1}>
           {lastLine}
         </Text>
-        <Text className="text-[11px] leading-4 text-muted-foreground">{t("food.source")}</Text>
         {granted === false && (
           <View className="gap-2">
             <Button variant="secondary" onPress={() => void scan(true)} disabled={scanning}>
