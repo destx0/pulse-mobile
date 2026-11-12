@@ -10,8 +10,8 @@ export type HabitDay = { day: string; state: DayState };
 export type HabitCardVM = {
   habit: Habit;
   stats: HabitStats;
-  /** The last seven days, oldest first, today last. */
-  week: HabitDay[];
+  /** The last `count` days, newest first (today first), for the list's grid. */
+  days: HabitDay[];
 };
 
 export type HabitsVM = {
@@ -20,9 +20,12 @@ export type HabitsVM = {
   archived: HabitCardVM[];
 };
 
-/** The cards for a set of habits and their entries: the tab, and the widget that lists today. */
-export function habitCards(habits: readonly Habit[], entries: readonly HabitEntry[], today: string): HabitCardVM[] {
-  const days = lastDays(today, 7);
+/** The list's grid holds a month of days; older ones scroll out of view. */
+const LIST_DAYS = 30;
+
+/** The cards for a set of habits and their entries: the tab's grid, and the widget that lists today. */
+export function habitCards(habits: readonly Habit[], entries: readonly HabitEntry[], today: string, count = 7): HabitCardVM[] {
+  const days = lastDays(today, count).reverse();
   return habits.map((habit) => {
     const stats = habitStats(habit, entries, today);
     const mine = entries.filter((e) => e.habitId === habit.id);
@@ -30,7 +33,7 @@ export function habitCards(habits: readonly Habit[], entries: readonly HabitEntr
     return {
       habit,
       stats,
-      week: days.map((day) => ({ day, state: dayState(habit, byDay, day) })),
+      days: days.map((day) => ({ day, state: dayState(habit, byDay, day) })),
     };
   });
 }
@@ -39,10 +42,9 @@ export async function getHabits(ctx: QueryCtx): Promise<HabitsVM> {
   const [habits, entries] = await Promise.all([ctx.store.habits(), ctx.store.habitEntries()]);
   const active = habits.filter((h) => !h.archived);
   const archived = habits.filter((h) => h.archived);
-  const cards = habitCards(active, entries, ctx.today);
   return {
     today: ctx.today,
-    habits: cards,
+    habits: habitCards(active, entries, ctx.today, LIST_DAYS),
     archived: habitCards(archived, entries, ctx.today),
   };
 }

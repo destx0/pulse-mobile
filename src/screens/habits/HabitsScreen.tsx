@@ -1,10 +1,10 @@
-// Habits `/habits`: the daily list, Loop's cards. Each card carries the habit icon, its period progress and the last
-// seven days, whose last mark is today; the menu edits, skips, archives or deletes. The tracker is Pulse's own: local
+// Habits `/habits`: a grid of habits by day, Loop's numbers. The left column holds the habit, the right one a scrollable
+// month of ticks with today first; a tap ticks a day, a long press opens the menu. The tracker is Pulse's own: local
 // SQLite, no health source.
 import { useState } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Archive, ArchiveRestore, CircleCheckBig, MoreHorizontal, Pencil, Plus, SkipForward, Trash2, type LucideIcon } from "lucide-react-native";
+import { Archive, ArchiveRestore, CircleCheckBig, Pencil, Plus, SkipForward, Trash2, type LucideIcon } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
 import { habitIcon } from "@/core/habits/icons";
 import type { HabitCardVM } from "@/queries/habits";
@@ -13,8 +13,7 @@ import { archiveHabit, clearHabitEntry, deleteHabit, setHabitEntry, skipHabitDay
 import { actionCtx } from "@/state/app";
 import { habitsChanged } from "@/state/habits";
 import { useScreen } from "@/screens/useScreen";
-import { formatDay } from "@/lib/format";
-import { periodText, streakText } from "@/lib/habits";
+import { DAY, formatDay } from "@/lib/format";
 import { Card, CardFill } from "@/ui/Card";
 import { cn } from "@/ui/cn";
 import { Icon } from "@/ui/Icon";
@@ -94,11 +93,7 @@ export function HabitsScreen() {
           {data.habits.length === 0 ? (
             <EmptyState icon={CircleCheckBig} body={t("emptyBody")} action={{ label: t("new"), onClick: () => push("/habits/edit") }} />
           ) : (
-            <View className="gap-2.5">
-              {data.habits.map((card) => (
-                <HabitCard key={card.habit.id} card={card} today={data.today} onToggle={toggle} onSkip={skip} onDelete={setRemoving} onArchive={archive} />
-              ))}
-            </View>
+            <HabitGrid cards={data.habits} today={data.today} onToggle={toggle} onSkip={skip} onDelete={setRemoving} onArchive={archive} />
           )}
           {data.archived.length > 0 && (
             <SectionShell variant="section" title={t("archived")}>
@@ -154,62 +149,117 @@ export function HabitsScreen() {
   );
 }
 
-function HabitCard({
-  card,
+/** The list as a table: a fixed habit column and a month of days that scrolls under today's date header. */
+function HabitGrid({
+  cards,
   today,
   onToggle,
   onSkip,
   onDelete,
   onArchive,
 }: {
-  card: HabitCardVM;
+  cards: HabitCardVM[];
   today: string;
   onToggle: (habit: Habit, day: string) => Promise<void>;
   onSkip: (habit: Habit, day: string) => Promise<void>;
   onDelete: (habit: Habit) => void;
   onArchive: (habit: Habit) => Promise<void>;
 }) {
-  const { t } = useTranslation("habits");
   const { c } = useTheme();
-  const color = habitColor(c, card.habit.color);
-  const { ref: menuRef, anchor, open: openMenu, close: closeMenu } = useMenu();
-  const current = card.stats.current;
+  const days = cards[0]?.days ?? [];
   return (
-    <Card className="gap-2 px-4 py-2.5">
+    <Card className="py-0">
       <CardFill />
-      <View className="flex-row items-center gap-2.5">
-        <Text className="text-[18px] leading-6">{habitIcon(card.habit)}</Text>
-        <Press accessibilityRole="link" accessibilityLabel={card.habit.name} onPress={() => push(`/habits/${card.habit.id}`)} className="min-w-0 flex-1 gap-0.5">
-          <Text className="shrink text-[15px] font-semibold leading-5" numberOfLines={1}>
-            {card.habit.name}
-          </Text>
-          <Text className="text-[11px] leading-[14px] text-muted-foreground" numberOfLines={1}>
-            {periodText(card.habit, card.stats)}
-            {current > 0 ? ` · ${streakText(card.habit, current)}` : ""}
-          </Text>
-        </Press>
-        <View ref={menuRef} collapsable={false}>
-          <Press accessibilityRole="button" accessibilityLabel={t("menu.label")} onPress={openMenu} className="size-9 items-center justify-center">
-            <Icon icon={MoreHorizontal} size={18} tone="muted-foreground" />
-          </Press>
-        </View>
-      </View>
-      {/* The week row is the tick: its last mark is today. */}
       <View className="flex-row">
-        {card.week.map((d) => (
-          <Press key={d.day} accessibilityRole="button" accessibilityLabel={formatDay(d.day, { weekday: "long" })} disabled={d.state.state === "off"} accessibilityState={{ disabled: d.state.state === "off" }} onPress={() => void onToggle(card.habit, d.day)} className="flex-1 items-center gap-1 py-1">
-            <Text className={cn("text-[9px] font-semibold uppercase leading-3 tracking-[0.04em]", d.day === today ? "text-foreground" : "text-muted-foreground")}>{formatDay(d.day, { weekday: "narrow" })}</Text>
-            <DayMark habit={card.habit} state={d.state} color={color} size={22} today={d.day === today} />
-          </Press>
-        ))}
+        <View className="w-36 shrink-0 border-r border-border">
+          <View className="h-9 border-b border-border" />
+          {cards.map((card, i) => (
+            <HabitNameCell key={card.habit.id} card={card} today={today} first={i === 0} onSkip={onSkip} onDelete={onDelete} onArchive={onArchive} />
+          ))}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
+          <View>
+            <View className="h-9 flex-row border-b border-border">
+              {days.map((d) => (
+                <DayHeading key={d.day} day={d.day} today={today} />
+              ))}
+            </View>
+            {cards.map((card, i) => {
+              const color = habitColor(c, card.habit.color);
+              return (
+                <View key={card.habit.id} className={cn("h-11 flex-row", i > 0 && "border-t border-border")}>
+                  {card.days.map((d) => {
+                    const off = d.state.state === "off";
+                    return (
+                      <Press key={d.day} accessibilityRole="button" accessibilityLabel={formatDay(d.day, DAY.long)} disabled={off} accessibilityState={{ disabled: off }} onPress={() => void onToggle(card.habit, d.day)} className="h-11 w-10 items-center justify-center">
+                        <DayMark habit={card.habit} state={d.state} color={color} size={24} today={d.day === today} />
+                      </Press>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
-      <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
-        <MenuItem icon={Pencil} label={t("menu.edit")} onPress={() => (closeMenu(), push(`/habits/edit?id=${card.habit.id}`))} />
-        <MenuItem icon={SkipForward} label={t("menu.skip")} onPress={() => (closeMenu(), void onSkip(card.habit, today))} />
-        <MenuItem icon={Archive} label={t("menu.archive")} onPress={() => (closeMenu(), void onArchive(card.habit))} />
-        <MenuItem icon={Trash2} label={t("menu.delete")} danger onPress={() => (closeMenu(), onDelete(card.habit))} />
-      </MenuPanel>
     </Card>
+  );
+}
+
+/** One date over its tick: the weekday and the day of the month, today in the foreground. */
+function DayHeading({ day, today }: { day: string; today: string }) {
+  const now = day === today;
+  return (
+    <View className="h-9 w-10 items-center justify-center gap-0.5">
+      <Text className={cn("text-[9px] font-bold uppercase leading-3 tracking-[0.06em]", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { weekday: "short" })}</Text>
+      <Text className={cn("font-numeric text-[10px] font-semibold leading-3", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { day: "numeric" })}</Text>
+    </View>
+  );
+}
+
+/** A habit's fixed cell: tapping opens it, holding opens the menu the tick columns have no room for. */
+function HabitNameCell({
+  card,
+  today,
+  first,
+  onSkip,
+  onDelete,
+  onArchive,
+}: {
+  card: HabitCardVM;
+  today: string;
+  first: boolean;
+  onSkip: (habit: Habit, day: string) => Promise<void>;
+  onDelete: (habit: Habit) => void;
+  onArchive: (habit: Habit) => Promise<void>;
+}) {
+  const { t } = useTranslation("habits");
+  const { ref, anchor, open, close } = useMenu();
+  return (
+    <View ref={ref} collapsable={false} className={cn("h-11 flex-row items-center px-3", !first && "border-t border-border")}>
+      <Press
+        accessibilityRole="link"
+        accessibilityLabel={card.habit.name}
+        accessibilityHint={t("menu.label")}
+        accessibilityActions={[{ name: "longpress", label: t("menu.label") }]}
+        onAccessibilityAction={(e) => e.nativeEvent.actionName === "longpress" && open()}
+        onPress={() => push(`/habits/${card.habit.id}`)}
+        onLongPress={open}
+        delayLongPress={400}
+        className="min-w-0 flex-1 flex-row items-center gap-2"
+      >
+        <Text className="text-[17px] leading-5">{habitIcon(card.habit)}</Text>
+        <Text className="shrink text-[15px] font-semibold leading-5" numberOfLines={1}>
+          {card.habit.name}
+        </Text>
+      </Press>
+      <MenuPanel anchor={anchor} onClose={close} align="start">
+        <MenuItem icon={Pencil} label={t("menu.edit")} onPress={() => (close(), push(`/habits/edit?id=${card.habit.id}`))} />
+        <MenuItem icon={SkipForward} label={t("menu.skip")} onPress={() => (close(), void onSkip(card.habit, today))} />
+        <MenuItem icon={Archive} label={t("menu.archive")} onPress={() => (close(), void onArchive(card.habit))} />
+        <MenuItem icon={Trash2} label={t("menu.delete")} danger onPress={() => (close(), onDelete(card.habit))} />
+      </MenuPanel>
+    </View>
   );
 }
 

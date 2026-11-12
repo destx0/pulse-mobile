@@ -4,7 +4,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from "lucide-react-native";
+import { Archive, ArchiveRestore, MoreHorizontal, Pencil, SkipForward, Trash2 } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
 import { habitIcon } from "@/core/habits/icons";
 import type { DayState } from "@/core/habits/logic";
@@ -80,6 +80,10 @@ export function HabitScreen() {
     setValue(null);
     changed();
   };
+  const skipToday = async () => {
+    await skipHabitDay(store(), habit, days[days.length - 1].day, nowS());
+    changed();
+  };
   const archive = async (archived: boolean) => {
     await archiveHabit(store(), habit.id, archived, nowS());
     changed();
@@ -138,6 +142,7 @@ export function HabitScreen() {
       />
       <MenuPanel anchor={anchor} onClose={closeMenu} align="end">
         <MenuItem icon={Pencil} label={t("menu.edit")} onPress={() => (closeMenu(), push(`/habits/edit?id=${habit.id}`))} />
+        {!habit.archived && <MenuItem icon={SkipForward} label={t("menu.skip")} onPress={() => (closeMenu(), void skipToday())} />}
         <MenuItem icon={habit.archived ? ArchiveRestore : Archive} label={habit.archived ? t("menu.unarchive") : t("menu.archive")} onPress={() => (closeMenu(), void archive(!habit.archived))} />
         <MenuItem icon={Trash2} label={t("menu.delete")} danger onPress={() => (closeMenu(), setRemoving(true))} />
       </MenuPanel>
