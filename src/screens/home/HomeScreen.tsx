@@ -285,7 +285,7 @@ function GymToday() {
   const [pending, setPending] = useState(false);
   const [now] = useState(() => Date.now());
   if (!data) return null;
-  const { active, suggested } = data;
+  const { active, suggested, doneToday } = data;
   const start = async () => {
     if (pending) return;
     setPending(true);
@@ -302,13 +302,24 @@ function GymToday() {
     ? t("home.inProgress")
     : suggested
       ? `${t("card.lastDone", { when: ago(suggested.lastTs * 1000, now) })} · ${t("card.exercises", { count: suggested.exercises })}`
-      : null;
+      : doneToday
+        ? t("card.lastDone", { when: ago(doneToday.endTs * 1000, now) })
+        : null;
   return (
     <SectionShell variant="card" title={t("card.title")}>
       <View className="gap-2">
-        <Button onPress={() => void start()} disabled={pending}>
-          {active ? t("card.resume", { name: active.name }) : suggested ? t("card.start", { name: suggested.name }) : t("card.startEmpty")}
-        </Button>
+        {active || suggested || !doneToday ? (
+          <Button onPress={() => void start()} disabled={pending}>
+            {active ? t("card.resume", { name: active.name }) : suggested ? t("card.start", { name: suggested.name }) : t("card.startEmpty")}
+          </Button>
+        ) : (
+          <View className="h-12 flex-row items-center justify-center gap-2 rounded-full bg-optimal/15 px-4">
+            <Icon icon={Check} size={18} tone="optimal-text" strokeWidth={2.6} />
+            <Text className="min-w-0 text-[15px] font-semibold text-optimal-text" numberOfLines={1}>
+              {t("card.doneToday", { name: doneToday.name })}
+            </Text>
+          </View>
+        )}
         {!!meta && <Text className={cn(CAPTION, "text-center")}>{meta}</Text>}
         <Button variant="secondary" onPress={() => push("/scale")}>
           {t("card.logWeight")}

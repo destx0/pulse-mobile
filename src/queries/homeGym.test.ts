@@ -35,6 +35,7 @@ describe("getHomeGym", () => {
     await session("pull", "pull", 2);
     expect(await getHomeGym(ctx())).toEqual({
       active: null,
+      doneToday: null,
       suggested: { routineId: "pull", name: "Pull", exercises: 1, lastTs: NOW - 2 * DAY },
     });
   });
@@ -46,7 +47,7 @@ describe("getHomeGym", () => {
 
   it("has no suggestion when the last template use is over a month old", async () => {
     await session("legs", "legs", 31);
-    expect(await getHomeGym(ctx())).toEqual({ active: null, suggested: null });
+    expect(await getHomeGym(ctx())).toEqual({ active: null, doneToday: null, suggested: null });
   });
 
   it("skips a deleted template and names the newest one still there", async () => {
@@ -57,6 +58,11 @@ describe("getHomeGym", () => {
 
   it("reports the workout still running", async () => {
     await session("now", "pull", 0, false);
-    expect(await getHomeGym(ctx())).toEqual({ active: { sessionId: "now", name: "now" }, suggested: null });
+    expect(await getHomeGym(ctx())).toEqual({ active: { sessionId: "now", name: "now" }, doneToday: null, suggested: null });
+  });
+
+  it("does not suggest the template again after a workout today", async () => {
+    await session("today", "legs", 0);
+    expect(await getHomeGym(ctx())).toEqual({ active: null, doneToday: { name: "today", endTs: NOW + 3000 }, suggested: null });
   });
 });

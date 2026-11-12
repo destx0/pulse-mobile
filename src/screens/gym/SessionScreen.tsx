@@ -637,9 +637,9 @@ function BlockCard({
           onPress={() => onTickBlock(block, !allDone)}
           className="h-11 w-11 items-center justify-center"
         >
-          <View className={cn("size-6 items-center justify-center rounded-full", allDone ? "bg-secondary" : "border border-muted-foreground")}>
+          <View className={cn("size-6 items-center justify-center rounded-full", allDone ? "border border-optimal bg-optimal" : "border border-muted-foreground")}>
             {allDone ? (
-              <Icon icon={Check} size={13} tone="strain-text" strokeWidth={2.6} />
+              <Icon icon={Check} size={13} tone="background" strokeWidth={2.6} />
             ) : someDone ? (
               <View className="h-0.5 w-3 rounded-full bg-muted-foreground" />
             ) : null}
@@ -835,10 +835,10 @@ function SetRow({
     : "—";
 
   return (
-    <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className="flex-row items-center gap-3 rounded-lg px-1 py-1">
+    <Press onLongPress={onMenu} delayLongPress={350} accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`} className={cn("flex-row items-center gap-3 rounded-lg px-1 py-1", done && "bg-optimal/15")}>
       <Animated.View pointerEvents="none" className="absolute inset-0 rounded-lg bg-strain" style={glowStyle} />
       <Press onPress={onMenu} hitSlop={10} className="w-8 items-center justify-center" accessibilityRole="button" accessibilityLabel={`${t("session.set")} ${set.setNo}`}>
-        <Text className="font-numeric text-[13px] font-semibold text-foreground-secondary">{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
+        <Text className={cn("font-numeric text-[13px] font-semibold", done ? "text-optimal-text" : "text-foreground-secondary")}>{set.type === "warmup" ? "W" : set.type === "drop" ? "D" : set.type === "failure" ? "F" : set.setNo}</Text>
       </Press>
       <View className="w-[74px] flex-row items-center justify-end gap-1">
         {pr && <Text className="text-[11px] font-bold uppercase tracking-[0.1em] text-strain-text">{t("session.record")}</Text>}
@@ -849,12 +849,12 @@ function SetRow({
       <View className="flex-1 flex-row items-center gap-2">
         {hold && <View className="flex-1" />}
         {!hold && (
-          <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} />
+          <NumCell value={weight} onChangeText={(v) => ((typed.current = true), setWeight(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.kg")}`} completed={done} />
         )}
-        {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} />}
-        {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} />}
-        {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} />}
-        {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} />}
+        {hold && <NumCell value={secs} onChangeText={(v) => ((typed.current = true), setSecs(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.sec")}`} completed={done} />}
+        {cardio && <NumCell value={km} onChangeText={(v) => ((typed.current = true), setKm(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.km")}`} completed={done} />}
+        {cardio && <NumCell value={mins} onChangeText={(v) => ((typed.current = true), setMins(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.min")}`} completed={done} />}
+        {!hold && !cardio && <NumCell value={reps} onChangeText={(v) => ((typed.current = true), setReps(v))} onEnd={commit} className="flex-1" label={`${t("session.set")} ${set.setNo} ${t("session.reps")}`} completed={done} />}
       </View>
       <Press
         accessibilityRole="checkbox"
@@ -862,8 +862,8 @@ function SetRow({
         onPress={() => void toggle()}
         className="h-11 w-11 items-center justify-center"
       >
-        <View className={cn("size-8 items-center justify-center rounded-full border", done ? "border-muted-foreground bg-secondary" : "border-muted-foreground")}>
-          {done && <Icon icon={Check} size={13} tone="strain-text" strokeWidth={2.6} />}
+        <View className={cn("size-8 items-center justify-center rounded-full border", done ? "border-optimal bg-optimal" : "border-muted-foreground")}>
+          {done && <Icon icon={Check} size={13} tone="background" strokeWidth={2.6} />}
         </View>
       </Press>
     </Press>
@@ -871,7 +871,7 @@ function SetRow({
 }
 
 /** The number cell: a filled rounded box, the way Strong draws a set's weight. */
-function NumCell({ value, onChangeText, onEnd, className, label }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; label: string }) {
+function NumCell({ value, onChangeText, onEnd, className, label, completed }: { value: string; onChangeText: (v: string) => void; onEnd: () => void; className?: string; label: string; completed?: boolean }) {
   const { c } = useTheme();
   return (
     <TextInput
@@ -885,7 +885,7 @@ function NumCell({ value, onChangeText, onEnd, className, label }: { value: stri
       placeholder="0"
       accessibilityLabel={label}
       placeholderTextColor={c["muted-foreground"]}
-      className={cn("h-11 rounded-lg bg-secondary text-center font-numeric text-[19px] font-semibold text-foreground", className)}
+      className={cn("h-11 rounded-lg text-center font-numeric text-[19px] font-semibold text-foreground", completed ? "bg-transparent" : "bg-secondary", className)}
       // Android gives a TextInput font padding above the line, which a 36 px box then clips: a 0 lost its top and read
       // as a U ("10" as "IU"). No padding, no extra font padding, and the glyph sits centred.
       style={{ paddingVertical: 0, includeFontPadding: false, textAlignVertical: "center", fontFamily: FACES.numeric.semibold, fontVariant: ["tabular-nums"] }}

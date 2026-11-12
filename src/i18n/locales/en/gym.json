@@ -6,6 +6,7 @@
     "startEmpty": "Start a workout",
     "resume": "Resume {{name}}",
     "lastDone": "Last done {{when}}",
+    "doneToday": "{{name}} · done today",
     "exercises_one": "{{count}} exercise",
     "exercises_other": "{{count}} exercises",
     "logWeight": "Log weight"

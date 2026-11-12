@@ -31,6 +31,8 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
   Resume. A tick does not start a rest timer (the owner does not use one); a rest already stored on a session still draws
   and counts its own clock. The screen does not wait for those writes: a tick and the rest bar draw in the tap's own
   frame, then the write and the reload land behind them; a field is written only when its text changed.
+- **A ticked set turns green.** The whole row takes a green tint and the tick fills green, Strong's completed-row look,
+  so a glance down the workout shows what is still left.
 - **A template opens ready to tick.** Its sets carry the planned reps and the weight logged the last time that exercise
   was trained; tapping the previous cell copies that session's numbers.
 - **Set details.** Tap the set number for working / warmup / drop / failure, an RPE, a note, or to delete the set. Warmups
@@ -51,6 +53,8 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
 - **The template can be updated while training.** "Update template" in the session menu (or on the finish dialog) makes
   the session's template match its ticked exercises, sets and most common reps; the next session from it starts with
   that shape, not the old exercises.
+- **Home does not offer today's workout twice.** Once a workout is finished, Home's card shows it as done for the rest of
+  the day (name and how long ago, no Start); the next template is suggested tomorrow. Log weight stays on the card.
 
 ## Data
 
