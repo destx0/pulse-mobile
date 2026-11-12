@@ -204,7 +204,7 @@ function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {
             <SectionShell variant="section" title={t("section.myDay")} action={<PlusKey label={vm.isToday ? t("add.today") : t("add.day", { day: formatDay(d, DAY.short) })} />}>
               <View className="gap-3">
                 {vm.outlook && <DayBanner outlook={vm.outlook} />}
-                {vm.isToday && <GymToday d={d} />}
+                {vm.isToday && <GymToday />}
                 <SectionShell variant="card" title={vm.activities.title} info={vm.isToday ? false : cardInfo("Activities")} action={<IconLink href="/activities" label={t("activities.all")} icon={Maximize2} />}>
                   {vm.activities.items.length || vm.activities.detected.length ? (
                     <View className="gap-1.5">
@@ -279,7 +279,7 @@ function Home({ vm, timeZone }: { vm: HomePageVM; timeZone: string }) {
   );
 }
 
-function GymToday({ d }: { d: string }) {
+function GymToday() {
   const { t } = useTranslation("gym");
   const { data } = useScreen(getHomeGym, ["home-gym"]);
   const [pending, setPending] = useState(false);
@@ -310,7 +310,7 @@ function GymToday({ d }: { d: string }) {
           {active ? t("card.resume", { name: active.name }) : suggested ? t("card.start", { name: suggested.name }) : t("card.startEmpty")}
         </Button>
         {!!meta && <Text className={cn(CAPTION, "text-center")}>{meta}</Text>}
-        <Button variant="secondary" onPress={() => push(`/log?kind=weight&d=${d}`)}>
+        <Button variant="secondary" onPress={() => push("/scale")}>
           {t("card.logWeight")}
         </Button>
       </View>
