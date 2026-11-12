@@ -20,6 +20,7 @@ in `src/health/sync.ts` (30 and 8 at this writing).
 | `design/spec.md` | The Pulse PWA's design spec: the visual reference. Its stack names (Google, Recharts, shadcn) describe the web app, not this one; the app is React Native, Skia and NativeWind. | 2026-10 |
 | `gym.md`, `gym-plan.md`, `gym-ux-review.md` | The gym log's model, plan and review. | 2026-11 |
 | `habits.md` | The habit tracker: Loop's score, the screens, and the Android widgets. | 2026-11 |
+| `food-orders.md` | Food orders from SMS: the local parser, the permission and what stays on the phone. | 2026-11 |
 | `releases.md` | Version, signing, pugg, the update check. | 2026-11 |
 | `runbooks/` | Operational runbooks (the release review). | 2026-10 |
 | `audits/2026-11-03-snappiness-audit.md` | Why the app feels slow on a low-end phone, with measurements and the fix order. | 2026-11-03 |

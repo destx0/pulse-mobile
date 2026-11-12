@@ -9,6 +9,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
 import { InteractionManager, AppState } from "react-native";
 import { markUiRuntime, registerAppStore, runSync, WAIT_FOR_TASK_MS, type Source } from "@/background/runSync";
+import { syncOfficeGeofence } from "@/background/office";
+import { validOffice, type Office } from "@/core/office";
 import { releaseLock, takeLock, waitForLock } from "@/background/lock";
 import { cancelRest } from "@/background/notify";
 import { startBackground } from "@/background/startup";
@@ -309,6 +311,9 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
     // snapshot load after it has painted (they read storage, notifications and the network).
     afterIdle(() => {
       void startBackground();
+      // The fence is re-registered from the saved profile (Play Services keeps it across reboots; this also picks up a
+      // place saved on another install of the same database).
+      void syncOfficeGeofence();
       // A source switch inside the idle window has already loaded the other store's snapshot.
       if (state.store === st) void initLeetCode(st);
       void checkForUpdate();
@@ -391,6 +396,22 @@ export async function setDisplay(display: DisplayPrefs): Promise<void> {
   dataChanged("display");
 }
 
+/**
+ * Saves or removes the office (Settings › Places) and makes the geofence match. No rescore: it is not a health input.
+ * False when the place is not a coordinate pair.
+ */
+export async function setOffice(office: Office | null): Promise<boolean> {
+  const { store, profile } = state;
+  if (!store || !profile) return false;
+  if (office && !validOffice(office)) return false;
+  const p = { ...profile, office };
+  await store.setProfile(p);
+  patch({ profile: p });
+  dataChanged("logs");
+  await syncOfficeGeofence();
+  return true;
+}
+
 /** Starts i18next and the formatters' locale in what `choice` means (the phone's language for "auto"). */
 async function applyLanguage(choice: LanguageChoice): Promise<void> {
   const language = resolveChoice(choice);
@@ -436,6 +457,8 @@ export async function exploreSample(): Promise<void> {
       await demoStore!.clearAll();
       await demoStore!.clearGym();
       await demoStore!.clearHabits();
+      await demoStore!.clearFoodOrders();
+      await demoStore!.clearOffice();
       const seeded = await seedDemo(demoStore!, { today, timeZone });
       await seedDemoFood(demoStore!, { today, timeZone, now: Math.floor(Date.now() / 1000) });
       await ensureDefaultTags(demoStore!);
@@ -545,6 +568,8 @@ export async function reset(): Promise<void> {
       await store.clearAll();
       await store.clearGym();
       await store.clearHabits();
+      await store.clearFoodOrders();
+      await store.clearOffice();
       // clearAll keeps the coach's chats (they are not health rows); "Delete everything" must not.
       await resetCoachState(store);
     }

@@ -7,6 +7,8 @@ import { isDeadConnection } from "./deadConnection";
 import type { CoachChatRow, DayRange, EntrySource, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportRow, ScoreRow, SeriesKind, Store } from "./store";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet, SetType } from "./gym";
 import type { Habit, HabitEntry } from "./habits";
+import type { FoodOrder } from "./foodOrders";
+import type { OfficeEvent } from "@/core/office";
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
@@ -16,7 +18,7 @@ import { slice } from "@/lib/yield";
 const SCHEMA = `
 create table if not exists profile (
   id integer primary key check (id = 1), birth_date text not null, sex text not null, max_hr real, height_cm real, time_zone text not null,
-  waist_cm real
+  waist_cm real, office text
 );
 create table if not exists sync_state (id integer primary key check (id = 1), last_sync_ts integer, first_day text, last_error text);
 create table if not exists daily_metrics (
@@ -105,6 +107,14 @@ create table if not exists habit_entries (
   updated_at integer not null, primary key (habit_id, day)
 );
 create index if not exists habit_entries_day on habit_entries(day);
+create table if not exists food_orders (
+  id text primary key, key text not null unique, day text not null, ts integer not null, merchant text not null, source text not null
+);
+create index if not exists food_orders_day on food_orders(day);
+create table if not exists office_events (
+  id text primary key, kind text not null, ts integer not null, day text not null
+);
+create index if not exists office_events_ts on office_events (ts);
 `;
 
 /**
@@ -138,13 +148,17 @@ const MIGRATIONS: Migration[] = [
   { sql: "alter table habits add column interval_days integer not null default 1", table: "habits", column: "interval_days" },
   { sql: "alter table habits add column weekdays_only integer not null default 0", table: "habits", column: "weekdays_only" },
   { sql: "alter table habits add column start_day text not null default ''", table: "habits", column: "start_day" },
+  // The office geofence's events and the place in the profile (Settings › Places).
+  { sql: "create table if not exists office_events (id text primary key, kind text not null, ts integer not null, day text not null)" },
+  { sql: "create index if not exists office_events_ts on office_events (ts)" },
+  { sql: "alter table profile add column office text", table: "profile", column: "office" },
 ];
 
 /** The columns the app reads unconditionally; checked after the migrations so a half-applied schema cannot boot. */
 const REQUIRED_COLUMNS: Record<string, string[]> = {
   logged_entries: ["source"],
   daily_scores: ["detected", "hrv_status", "training"],
-  profile: ["name", "photo", "sleep_goal", "display"],
+  profile: ["name", "photo", "sleep_goal", "display", "office"],
   hr_days: ["minute"],
   gym_sets: ["superset_id"],
   habits: ["interval_days", "weekdays_only", "start_day"],
@@ -336,17 +350,18 @@ class SqliteStore implements Store {
   async getProfile() {
     const r = await this.db.getFirstAsync<{
       birth_date: string; sex: Profile["sex"]; max_hr: number | null; height_cm: number | null; waist_cm: number | null; time_zone: string;
-      name: string | null; photo: string | null; sleep_goal: string | null; display: string | null;
-    }>("select birth_date, sex, max_hr, height_cm, waist_cm, time_zone, name, photo, sleep_goal, display from profile where id = 1");
+      name: string | null; photo: string | null; sleep_goal: string | null; display: string | null; office: string | null;
+    }>("select birth_date, sex, max_hr, height_cm, waist_cm, time_zone, name, photo, sleep_goal, display, office from profile where id = 1");
     return r && {
       birthDate: r.birth_date, sex: r.sex, maxHr: r.max_hr, heightCm: r.height_cm, waistCm: r.waist_cm, timeZone: r.time_zone, name: r.name, photo: r.photo,
       sleepGoal: parse<NonNullable<Profile["sleepGoal"]>>(r.sleep_goal),
       display: parse<NonNullable<Profile["display"]>>(r.display),
+      office: parse<NonNullable<Profile["office"]>>(r.office),
     };
   }
   async setProfile(p: Profile) {
-    await this.tx((db) => db.runAsync("insert or replace into profile (id, birth_date, sex, max_hr, height_cm, waist_cm, time_zone, name, photo, sleep_goal, display) values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-      p.birthDate, p.sex, p.maxHr, p.heightCm, p.waistCm ?? null, p.timeZone, p.name ?? null, p.photo ?? null, json(p.sleepGoal), json(p.display),
+    await this.tx((db) => db.runAsync("insert or replace into profile (id, birth_date, sex, max_hr, height_cm, waist_cm, time_zone, name, photo, sleep_goal, display, office) values (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+      p.birthDate, p.sex, p.maxHr, p.heightCm, p.waistCm ?? null, p.timeZone, p.name ?? null, p.photo ?? null, json(p.sleepGoal), json(p.display), json(p.office ?? null),
     ]));
   }
   async getSyncState(): Promise<SyncState> {
@@ -1031,6 +1046,34 @@ class SqliteStore implements Store {
     await this.db.runAsync("delete from habit_entries where habit_id = ? and day = ?", [habitId, day]);
   }
 
+  async foodOrders(from?: string, to?: string) {
+    const rows =
+      from && to
+        ? await this.db.getAllAsync<FoodOrderRow>("select * from food_orders where day >= ? and day <= ? order by ts desc", [from, to])
+        : await this.db.getAllAsync<FoodOrderRow>("select * from food_orders order by ts desc");
+    return rows.map(foodOrderOf);
+  }
+  async putFoodOrder(o: FoodOrder) {
+    await this.db.runAsync("insert or replace into food_orders (id, key, day, ts, merchant, source) values (?, ?, ?, ?, ?, ?)", [o.id, o.key, o.day, o.ts, o.merchant, o.source]);
+  }
+  async deleteFoodOrder(id: string) {
+    await this.db.runAsync("delete from food_orders where id = ?", [id]);
+  }
+  async clearFoodOrders() {
+    await this.db.runAsync("delete from food_orders");
+  }
+
+  async officeEvents(fromTs: number, toTs: number) {
+    const rows = await this.db.getAllAsync<OfficeEventRow>("select * from office_events where ts >= ? and ts < ? order by ts, id", [fromTs, toTs]);
+    return rows.map((r): OfficeEvent => ({ id: r.id, kind: r.kind === "exit" ? "exit" : "enter", ts: r.ts, day: r.day }));
+  }
+  async addOfficeEvent(e: OfficeEvent) {
+    await this.db.runAsync("insert or ignore into office_events (id, kind, ts, day) values (?, ?, ?, ?)", [e.id, e.kind, e.ts, e.day]);
+  }
+  async clearOffice() {
+    await this.db.runAsync("delete from office_events");
+  }
+
   async clearAll() {
     await this.tx(async (db) => {
       for (const t of TABLES) await db.runAsync(`delete from ${t}`);
@@ -1071,6 +1114,10 @@ type HabitRow = {
   target: number; target_type: string; unit: string | null; position: number; archived: number; created_at: number; updated_at: number;
 };
 type HabitEntryRow = { habit_id: string; day: string; value: number; skip: number; note: string | null; updated_at: number };
+type OfficeEventRow = { id: string; kind: string; ts: number; day: string };
+type FoodOrderRow = { id: string; key: string; day: string; ts: number; merchant: string; source: string };
+
+const foodOrderOf = (r: FoodOrderRow): FoodOrder => ({ id: r.id, key: r.key, day: r.day, ts: r.ts, merchant: r.merchant, source: r.source });
 
 const habitOf = (r: HabitRow): Habit => ({
   id: r.id,

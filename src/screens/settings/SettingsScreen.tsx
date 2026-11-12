@@ -14,14 +14,15 @@ import { DataSource } from "./DataSource";
 import { DeleteEverything } from "./DeleteEverything";
 import { LiveHeartRate } from "./LiveHeartRate";
 import { NotificationsSection } from "./NotificationsSection";
+import { OfficeSection } from "./OfficeSection";
 import { GoalsSettings } from "@/screens/goals/GoalsSettings";
 import { LeetCodeSection } from "./LeetCodeSection";
 import { ProfileCard } from "./ProfileCard";
 import { ScaleSection } from "./Scale";
 import { QueryError } from "@/ui/shells/QueryError";
 
-type SectionId = "profile" | "source" | "app" | "live" | "scale" | "notifications" | "goals" | "leetcode";
-const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "scale", "notifications", "goals", "leetcode"];
+type SectionId = "profile" | "source" | "app" | "live" | "scale" | "notifications" | "goals" | "leetcode" | "places";
+const SECTIONS: SectionId[] = ["profile", "source", "app", "live", "scale", "places", "notifications", "goals", "leetcode"];
 /** Older names: ?s=sync, ?s=appearance, ?s=profile, and the web's ?s=account. */
 const ALIAS: Record<string, SectionId> = { sync: "source", appearance: "app", account: "profile" };
 
@@ -122,6 +123,8 @@ export function SettingsScreen() {
               <GoalsSettings />
             ) : section === "leetcode" ? (
               <LeetCodeSection />
+            ) : section === "places" ? (
+              <OfficeSection />
             ) : section === "source" ? (
               <DataSource now={now} />
             ) : section === "app" ? (

@@ -32,6 +32,7 @@ import { SectionShell } from "@/ui/shells/SectionShell";
 import { push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
 import { DayMark, HabitValueDialog, habitColor } from "./parts";
+import { FoodOrdersCard } from "./FoodOrdersCard";
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
@@ -127,6 +128,7 @@ export function HabitsScreen() {
               </Card>
             </SectionShell>
           )}
+          <FoodOrdersCard />
         </>
       )}
 

@@ -48,6 +48,7 @@
         "android.permission.health.READ_OVULATION_TEST",
         "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
         "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_SMS",
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ]
     },
@@ -68,6 +69,13 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-sharing",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
       [
         "expo-build-properties",
         {

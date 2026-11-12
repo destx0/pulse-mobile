@@ -5,6 +5,8 @@ import type { DayRange, JournalTagChange, JournalTagRow, LoggedEntryRow, ReportR
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
 import type { Habit, HabitEntry } from "./habits";
+import type { FoodOrder } from "./foodOrders";
+import type { OfficeEvent } from "@/core/office";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { ActivityCostResult } from "@/core/algorithms/activityCost";
 import { minuteHr } from "@/core/engine/context";
@@ -122,6 +124,8 @@ export class MemoryStore implements Store {
   private gymImport: GymImportState | null = null;
   private habitMap = new Map<string, Habit>();
   private habitEntryMap = new Map<string, HabitEntry>();
+  private foodOrderMap = new Map<string, FoodOrder>();
+  private officeEventMap = new Map<string, OfficeEvent>();
 
   async getProfile() {
     return this.profile && copy(this.profile);
@@ -488,6 +492,32 @@ export class MemoryStore implements Store {
     this.habitEntryMap.delete(key2(habitId, day));
   }
 
+  // ── the food orders ─────────────────────────────────────────────────────────────────────────────────────────────
+  async foodOrders(from?: string, to?: string) {
+    return [...this.foodOrderMap.values()]
+      .filter((o) => (from === undefined || o.day >= from) && (to === undefined || o.day <= to))
+      .sort((a, b) => b.ts - a.ts)
+      .map(copy);
+  }
+  async putFoodOrder(order: FoodOrder) {
+    for (const [id, existing] of this.foodOrderMap) if (existing.key === order.key) this.foodOrderMap.delete(id);
+    this.foodOrderMap.set(order.id, copy(order));
+  }
+  async deleteFoodOrder(id: string) {
+    this.foodOrderMap.delete(id);
+  }
+
+  // ── the office geofence ─────────────────────────────────────────────────────────────────────────────────────────
+  async officeEvents(fromTs: number, toTs: number) {
+    return [...this.officeEventMap.values()].filter((e) => e.ts >= fromTs && e.ts < toTs).sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id)).map(copy);
+  }
+  async addOfficeEvent(event: OfficeEvent) {
+    if (!this.officeEventMap.has(event.id)) this.officeEventMap.set(event.id, copy(event));
+  }
+  async clearOffice() {
+    this.officeEventMap.clear();
+  }
+
   async compactHr(beforeTs: number) {
     return this.hr.compact(beforeTs);
   }
@@ -509,6 +539,10 @@ export class MemoryStore implements Store {
   async clearHabits() {
     this.habitMap.clear();
     this.habitEntryMap.clear();
+  }
+
+  async clearFoodOrders() {
+    this.foodOrderMap.clear();
   }
 
   async clearAll() {

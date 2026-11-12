@@ -164,6 +164,30 @@ describe("SqliteStore contract", () => {
     expect(await store.habitEntries()).toEqual([]);
   });
 
+  it("keeps the office's events in their window and stores the place in the profile", async () => {
+    const office = { latitude: 12.9716, longitude: 77.5946, habitId: "h1" };
+    const profile = { birthDate: "1990-01-01", sex: "male" as const, maxHr: null, heightCm: null, timeZone: "Asia/Kolkata" };
+    await store.setProfile({ ...profile, office });
+    expect((await store.getProfile())?.office).toEqual(office);
+    await store.addOfficeEvent({ id: "a", kind: "enter", ts: 100, day: "2026-11-12" });
+    await store.addOfficeEvent({ id: "b", kind: "exit", ts: 200, day: "2026-11-12" });
+    await store.addOfficeEvent({ id: "c", kind: "enter", ts: 300, day: "2026-11-12" });
+    await store.addOfficeEvent({ id: "b", kind: "exit", ts: 200, day: "2026-11-12" });
+    expect((await store.officeEvents(100, 300)).map((e) => e.id)).toEqual(["a", "b"]);
+    await store.clearOffice();
+    expect(await store.officeEvents(0, 400)).toEqual([]);
+  });
+
+  it("keeps food orders and replaces a follow-up by key", async () => {
+    const order = { id: "o1", key: "id:123456", day: "2026-11-02", ts: 1, merchant: "Biryani Blues", source: "SWIGGY" };
+    await store.putFoodOrder(order);
+    expect(await store.foodOrders("2026-11-02", "2026-11-02")).toEqual([order]);
+    await store.putFoodOrder({ ...order, id: "o2", ts: 2 });
+    expect(await store.foodOrders()).toEqual([{ ...order, id: "o2", ts: 2 }]);
+    await store.clearFoodOrders();
+    expect(await store.foodOrders()).toEqual([]);
+  });
+
   it("writes a first set list in one batch", async () => {
     const base = {
       sessionId: "s1",

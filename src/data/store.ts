@@ -3,6 +3,8 @@
 import type { DailyValue, Exercise, HealthRecord, HrSample, HrvSample, JournalEntry, Metrics, Profile, Segment, Session, StepsMinute, SyncState } from "./types";
 import type { GymExercise, GymImportState, GymMeasurement, GymRoutine, GymRoutineItem, GymSession, GymSet } from "./gym";
 import type { Habit, HabitEntry } from "./habits";
+import type { FoodOrder } from "./foodOrders";
+import type { OfficeEvent } from "@/core/office";
 import type { LeetCodeSnapshot } from "@/leetcode/types";
 import type { Stage1Activity, Stage1Day, Stage2Row } from "@/pipeline/types";
 import type { Report } from "@/core/algorithms/reports";
@@ -207,6 +209,25 @@ export interface Store {
   deleteHabitEntry(habitId: string, day: string): Promise<void>;
   /** Drops every habit and entry (Delete everything). */
   clearHabits(): Promise<void>;
+
+  // Food orders (src/core/food): confirmations read from the SMS inbox. Merchant and day only; no message body.
+  /** Orders with from <= day <= to (every one without a range), newest first. */
+  foodOrders(from?: string, to?: string): Promise<FoodOrder[]>;
+  /** Inserts or replaces one order (the same `key` from a follow-up message replaces the first). */
+  putFoodOrder(order: FoodOrder): Promise<void>;
+  /** Removes one false detection. */
+  deleteFoodOrder(id: string): Promise<void>;
+  /** Drops every detected order (Delete everything). */
+  clearFoodOrders(): Promise<void>;
+
+  // The office geofence (src/core/office): events written by the background task, read by Home and Settings. Local to
+  // the phone; nothing here goes to Health Connect and the health pipeline never reads it.
+  /** Events with fromTs <= ts < toTs, oldest first. */
+  officeEvents(fromTs: number, toTs: number): Promise<OfficeEvent[]>;
+  /** Inserts one; a repeated id is a no-op. */
+  addOfficeEvent(event: OfficeEvent): Promise<void>;
+  /** Drops every event (Delete everything). */
+  clearOffice(): Promise<void>;
 
   // Upkeep (src/background/maintenance.ts)
   /**

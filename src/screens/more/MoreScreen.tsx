@@ -3,7 +3,7 @@
 // Help, Your data, then About. The account row is Profile (no accounts); Coach opens the coach's settings.
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Activity, Archive, Bluetooth, BotMessageSquare, BookOpen, Calculator, CalendarDays, CalendarRange, ChartLine, Code2, Database, Dumbbell, FileUp, Palette, Plug, Ruler, Scale, Target, Trophy, UserRound, Wind } from "lucide-react-native";
+import { Activity, Archive, Bluetooth, BotMessageSquare, BookOpen, Calculator, CalendarDays, CalendarRange, ChartLine, Code2, Database, Dumbbell, FileUp, MapPin, Palette, Plug, Ruler, Scale, Target, Trophy, UserRound, Wind } from "lucide-react-native";
 import { i18n } from "@/i18n/config";
 import { formatDay, rangeLabel } from "@/lib/format";
 import { SCORING_VERSION } from "@/pipeline";
@@ -23,6 +23,7 @@ const settingsRows = (): LinkListRow[] => [
   { icon: Palette, label: i18n.t("more:row.app"), href: "/settings?s=app" },
   { icon: Bluetooth, label: i18n.t("more:row.liveHeartRate"), href: "/settings?s=live" },
   { icon: Scale, label: i18n.t("scale:settings.title"), href: "/settings?s=scale" },
+  { icon: MapPin, label: i18n.t("settings:places.title"), href: "/settings?s=places" },
   { icon: BotMessageSquare, label: i18n.t("more:row.coach"), href: "/coach/settings" },
   { icon: Target, label: i18n.t("more:row.goals"), href: "/settings?s=goals" },
 ];
