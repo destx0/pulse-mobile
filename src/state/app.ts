@@ -1,3 +1,5 @@
+import { clearWidgets, refreshWidgets } from "@/widgets/publish";
+import { workoutNative, workoutNativeAvailable } from "../../modules/pulse-workouts";
 import { i18n } from "@/i18n/config";
 // App-wide state: the Store, the profile, where data comes from (Health Connect, or the demo generator for "Explore
 // with sample data"), the sync + scoring run, and the query context the screens read with. Follows halo's
@@ -29,12 +31,14 @@ import { seedDemoFood } from "@/data/seedFood";
 import { forgetChanges } from "@/health/sync";
 import { localDay } from "@/lib/time";
 import { initLeetCode, leetcodeForeground, resetLeetCode } from "./leetcode";
+import { report, resetTelemetryId } from "@/lib/telemetry";
 import type { DisplayPrefs } from "@/lib/units";
 import type { QueryCtx } from "@/queries/ctx";
 import type { DayRow } from "@/queries/common";
 import { clearScreenCache } from "@/screens/screenCache";
 import { ensureDefaultTags } from "@/queries/journal";
 import { applyDisplay } from "./display";
+import { SOURCE_KEY } from "./source";
 import { checkForUpdate } from "./update";
 import { clearHabitWidgetConfigs } from "@/widgets/configKeys";
 
@@ -61,7 +65,6 @@ export type AppInfo = {
   theme: "system" | "light" | "dark";
 };
 
-const SOURCE_KEY = "pulse.source";
 const OWN_PROFILE_KEY = "pulse.ownProfile";
 
 export const THEME_KEY = "pulse.theme";
@@ -119,9 +122,13 @@ const scoresListeners = new Set<() => void>();
 export function dataChanged(scope: DataScope = "scores") {
   version++;
   for (const l of versionListeners) l();
-  if (scope !== "scores") return;
+  if (scope !== "scores") {
+    if (state.store && state.profile && state.source && state.onboarded) void refreshWidgets(queryCtx(), state.source);
+    return;
+  }
   scoresVersion++;
   for (const l of scoresListeners) l();
+  if (state.store && state.profile && state.source && state.onboarded) void refreshWidgets(queryCtx(), state.source);
 }
 const subscribeVersion = (l: () => void) => {
   versionListeners.add(l);
@@ -222,15 +229,18 @@ export function appStore(): Store {
 // ── The run ─────────────────────────────────────────────────────────────────
 
 let running: Promise<void> | null = null;
+/** Whether the run under way skips the import (a rescore after a finished workout). */
+let runningScoreOnly = false;
 export const isSyncing = () => running !== null;
 
 /**
  * Import (Health Connect) and score. Serialised: a second call joins the first. `force` scores even when the import
- * found nothing new (a profile edit, Sync now, a source switch); the boot and foreground runs do not force.
+ * found nothing new (a profile edit, Sync now, a source switch); `scoreOnly` skips the Health Connect read (a finished
+ * workout is already stored). A full run asked for during a score-only one follows it, so its import is not skipped.
  */
-function run(force = false): Promise<void> {
-  // A forced run asked for while another runs waits for it and then scores.
-  if (running) return force ? running.then(() => run(true)) : running;
+function run(force = false, scoreOnly = false): Promise<void> {
+  if (running && runningScoreOnly && !scoreOnly) return running.catch(() => {}).then(() => run(force, false));
+  if (running) return force ? running.then(() => run(true, scoreOnly)) : running;
   const { store, profile, source } = state;
   if (!store || !profile || !source) return Promise.resolve();
   const job = (async () => {
@@ -242,6 +252,7 @@ function run(force = false): Promise<void> {
         owner: "app",
         waitIfLocked: true,
         force,
+        scoreOnly,
         onProgress: (step, done, total) => patch({ progress: { step, done, total } }),
       });
       if (r.warnings.length) console.log("[sync]", r.warnings.join("; "));
@@ -258,11 +269,13 @@ function run(force = false): Promise<void> {
       patch({ status: usable ? "ready" : "error", error: message, progress: null, sync, onboarded: usable });
     } finally {
       running = null;
+      runningScoreOnly = false;
       // An unchanged import that skipped scoring changed nothing: no screen has to reload.
       if (changed) dataChanged("scores");
     }
   })();
   running = job;
+  runningScoreOnly = scoreOnly;
   return job;
 }
 
@@ -293,6 +306,11 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
         profile = legacyProfile;
       }
     }
+    // Finish a requested full reset before importing any surviving native journal.
+    if (workoutNativeAvailable && (await workoutNative.resetPending())) {
+      await st.workouts.clear();
+      await workoutNative.finishReset();
+    }
     // The background task reuses this connection when it fires while the app is up; the task registration and the
     // check-in reminder are made to match the saved settings.
     registerAppStore(st);
@@ -307,8 +325,6 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
     patch({ theme: theme === "light" || theme === "dark" ? theme : "system" });
     patch({ store: st, profile, source, sync, availability: avail });
     watchForeground();
-    // None of these is needed for the first screen: the background registration, the release check and the LeetCode
-    // snapshot load after it has painted (they read storage, notifications and the network).
     afterIdle(() => {
       void startBackground();
       // The fence is re-registered from the saved profile (Play Services keeps it across reboots; this also picks up a
@@ -318,11 +334,16 @@ export async function boot(applyTheme: (theme: string) => void): Promise<void> {
       if (state.store === st) void initLeetCode(st);
       void checkForUpdate();
     });
-    if (!profile) return patch({ status: "needs_profile" });
-    if (!source) return patch({ status: "needs_permissions" });
+    if (!profile) { await clearWidgets(); return patch({ status: "needs_profile" }); }
+    if (!source) { await clearWidgets(); return patch({ status: "needs_permissions" }); }
     if (source === "health_connect") {
       const perms = await permissionState().catch(() => null);
-      if (!perms || perms.granted.length === 0) return patch({ status: "needs_permissions" });
+      if (!perms || perms.granted.length === 0) {
+        // Connected before, and now Health Connect grants nothing: revoked in its settings, or its data was cleared.
+        void report("sync.permission_lost", { read: perms ? "none" : "failed" });
+        await clearWidgets();
+        return patch({ status: "needs_permissions" });
+      }
     }
     // Show the last scores at once; refresh once the first screen is up and the opening is over.
     const onboarded = sync.lastSyncTs !== null || source === "demo";
@@ -451,6 +472,7 @@ export async function exploreSample(): Promise<void> {
   try {
     if (running) await running.catch(() => {});
     demoStore = await openStore(DEMO_DB);
+    await clearWidgets();
     const timeZone = profile?.timeZone ?? deviceTimeZone();
     const today = localDay(Date.now() / 1000, timeZone);
     const demo = await withRunLock(async () => {
@@ -516,6 +538,7 @@ export async function connectHealth(): Promise<PermissionState | null> {
         profile = own;
       }
     }
+    await clearWidgets();
     await AsyncStorage.removeItem(OWN_PROFILE_KEY).catch(() => {});
   }
   await AsyncStorage.setItem(SOURCE_KEY, "health_connect");
@@ -529,6 +552,8 @@ export async function connectHealth(): Promise<PermissionState | null> {
 
 /** Re-imports recent days and rescores (Sync now, pull to sync). Joins a run in flight. */
 export const refresh = (): Promise<void> => run(true);
+/** Rescores what the store holds without reading Health Connect (the dirty days only), then publishes it. */
+export const rescore = (): Promise<void> => run(false, true);
 
 /** Re-reads the whole history window from Health Connect (for data an app shared late), then rescores. */
 export async function reimport(): Promise<void> {
@@ -578,10 +603,19 @@ export async function reset(): Promise<void> {
   await cancelRest();
   await resetLeetCode();
   await clearHabitWidgetConfigs();
+  // The native workout journal lives outside the two databases; stop its poll and clear its rows in the same reset.
+  const { workoutRecorder } = await import("@/live/workoutRecorder");
+  if (workoutNativeAvailable) await workoutNative.beginReset();
+  await workoutRecorder.settle();
+  for (const store of [real, demo]) await store.workouts.clear();
+  if (workoutNativeAvailable) await workoutNative.finishReset();
+  workoutRecorder.clearView();
+  await clearWidgets();
   deleteAllPhotos();
   await AsyncStorage.multiRemove(PREFERENCES).catch(() => {});
   await forgetChanges();
   swapStore(real, null, null, EMPTY_SYNC);
+  await resetTelemetryId();
   patch({ status: "needs_profile", profile: null, source: null, sync: EMPTY_SYNC, error: null, warnings: [], onboarded: false, theme: "system" });
   dataChanged();
 }

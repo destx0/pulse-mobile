@@ -43,7 +43,12 @@
     "checkNow": "Sprawdź teraz",
     "latest": "Pulse {{version}} to najnowsza wersja.",
     "group": "Aplikacja",
-    "notificationsLink": "Powiadomienia i tło"
+    "notificationsLink": "Powiadomienia i tło",
+    "privacy": "Prywatność",
+    "errorReports": "Wysyłaj raporty o błędach",
+    "errorReportsHint": "Gdy Pulse się zawiesi albo synchronizacja się nie uda, wysyła krótki raport: błąd, model telefonu i wersję Pulse. Niektóre sesje wysyłają też, ile trwają synchronizacje i ekrany. Nigdy Twoich danych o zdrowiu. Wyłączenie od razu zatrzymuje raporty.",
+    "shakeToReport": "Potrząśnij, aby zgłosić problem",
+    "shakeToReportHint": "Potrząśnij telefonem, aby powiedzieć nam, co poszło nie tak. Pulse wysyła tylko to, co napiszesz, ekran, na którym byłeś, model telefonu i wersję Pulse."
   },
   "form": {
     "optional": "Opcjonalnie"
@@ -109,7 +114,8 @@
     "menstruationPeriod": "Okresy",
     "menstruationFlow": "Intensywność okresu",
     "intermenstrualBleeding": "Plamienia",
-    "ovulationTest": "Testy owulacyjne"
+    "ovulationTest": "Testy owulacyjne",
+    "bloodPressure": "Ciśnienie krwi"
   },
   "source": {
     "pastData": "Dane z przeszłości",
@@ -342,5 +348,16 @@
     "permissionDenied": "Pulse potrzebuje zgody na lokalizację, aby znaleźć to miejsce.",
     "locateFailed": "Nie udało się odczytać lokalizacji. Spróbuj ponownie przy oknie.",
     "saveFailed": "Nie udało się zapisać biura."
+  },
+  "report": {
+    "title": "Zgłoś problem",
+    "description": "Napisz, co poszło nie tak i czego się spodziewałeś. Pulse wysyła to, co napiszesz, ekran, na którym byłeś, model telefonu i wersję Pulse. Nigdy Twoich danych o zdrowiu.",
+    "placeholder": "Co się stało?",
+    "send": "Wyślij",
+    "sending": "Wysyłanie…",
+    "failed": "Nie udało się wysłać zgłoszenia. Sprawdź połączenie i spróbuj ponownie.",
+    "off": "Włącz „Wysyłaj raporty o błędach” w Ustawienia › Aplikacja › Prywatność, aby to wysłać.",
+    "sentTitle": "Wysłano",
+    "sentBody": "Dziękujemy. Twoje zgłoszenie pomoże to naprawić."
   }
 }

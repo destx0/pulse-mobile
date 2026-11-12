@@ -44,6 +44,7 @@ example
 
 # local SQLite files from tests and scripts
 *.db
+.vitest/
 
 # Gradle output of local Expo modules
 modules/*/android/build/
@@ -55,3 +56,6 @@ modules/*/android/.gradle/
 
 # hill-climb captures (screenshots of the owner's data)
 .opencode/hill-climb/
+
+# Sentry build plugin credentials (docs/telemetry.md)
+.env.sentry-build-plugin

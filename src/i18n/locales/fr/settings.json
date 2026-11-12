@@ -43,7 +43,12 @@
     "checkNow": "Rechercher",
     "latest": "Pulse {{version}} est la dernière version.",
     "group": "App",
-    "notificationsLink": "Notifications et arrière-plan"
+    "notificationsLink": "Notifications et arrière-plan",
+    "privacy": "Confidentialité",
+    "errorReports": "Envoyer les rapports d’erreur",
+    "errorReportsHint": "Quand Pulse plante ou qu’une synchronisation échoue, il envoie un court rapport : l’erreur, le modèle du téléphone et la version de Pulse. Certaines sessions envoient aussi la durée des synchronisations et des écrans. Jamais tes données de santé. Le désactiver arrête les rapports tout de suite.",
+    "shakeToReport": "Secouer pour signaler un problème",
+    "shakeToReportHint": "Secouez le téléphone pour nous dire ce qui n’a pas marché. Pulse n’envoie que ce que vous écrivez, l’écran où vous étiez, le modèle du téléphone et la version de Pulse."
   },
   "form": {
     "optional": "Facultatif"
@@ -109,7 +114,8 @@
     "menstruationPeriod": "Règles",
     "menstruationFlow": "Flux des règles",
     "intermenstrualBleeding": "Saignements entre les règles",
-    "ovulationTest": "Tests d’ovulation"
+    "ovulationTest": "Tests d’ovulation",
+    "bloodPressure": "Pression artérielle"
   },
   "source": {
     "pastData": "Données passées",
@@ -341,5 +347,16 @@
     "permissionDenied": "Pulse a besoin de l’accès à la position pour trouver ce point.",
     "locateFailed": "Impossible de lire votre position. Réessayez près d’une fenêtre.",
     "saveFailed": "Impossible d’enregistrer le bureau."
+  },
+  "report": {
+    "title": "Signaler un problème",
+    "description": "Dites-nous ce qui n’a pas marché et ce que vous attendiez. Pulse envoie ce que vous écrivez, l’écran où vous étiez, le modèle du téléphone et la version de Pulse. Jamais vos données de santé.",
+    "placeholder": "Que s’est-il passé ?",
+    "send": "Envoyer",
+    "sending": "Envoi…",
+    "failed": "Impossible d’envoyer le signalement. Vérifiez votre connexion et réessayez.",
+    "off": "Activez « Envoyer les rapports d’erreur » dans Réglages › App › Confidentialité pour l’envoyer.",
+    "sentTitle": "Envoyé",
+    "sentBody": "Merci. Votre signalement aide à corriger le problème."
   }
 }

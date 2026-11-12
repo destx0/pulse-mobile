@@ -9,6 +9,7 @@ import { Glass } from "../Glass";
 import { haptic } from "../haptics";
 import { Gradient } from "../Gradient";
 import { HomeChart } from "../icons";
+import { LiveWorkoutBar } from "./LiveWorkoutBar";
 import { Icon } from "../Icon";
 import { Text } from "../Text";
 import { useTheme } from "../theme";
@@ -52,7 +53,7 @@ function Lens({ index, itemWidth }: { index: number; itemWidth: number }) {
   );
 }
 
-/** Phone tab bar: a 62 px glass squircle with four destinations (spec §4.2, G1), for expo-router's <Tabs tabBar>. */
+/** Phone tab bar: a 62 px glass squircle with five destinations, for expo-router's <Tabs tabBar>. */
 function Bar({ state, navigation, current: shown }: TabBarProps & { current: number }) {
   const { t } = useTranslation("ui");
   const { t: tg } = useTranslation("gym");
@@ -92,7 +93,7 @@ function Bar({ state, navigation, current: shown }: TabBarProps & { current: num
               className="h-full min-w-0 flex-1 items-center justify-center gap-0.5 rounded-[18px]"
             >
               <Icon icon={icon} size={26} tone={on ? "foreground" : "muted-foreground"} strokeWidth={1.6} />
-              <Text className={on ? "text-[11px] font-semibold leading-[13px] text-foreground" : "text-[11px] font-semibold leading-[13px] text-muted-foreground"}>{label}</Text>
+              <Text numberOfLines={1} className={on ? "text-[11px] font-semibold leading-[13px] text-foreground" : "text-[11px] font-semibold leading-[13px] text-muted-foreground"}>{label}</Text>
             </Press>
           );
         })}
@@ -110,7 +111,8 @@ export function TabBar(props: TabBarProps) {
   const route = props.state.routes[props.state.index];
   const current = TABS.findIndex((t) => t.route === route?.name);
   return (
-    <View pointerEvents="box-none" className="absolute inset-x-3 flex-row" style={{ bottom }}>
+    <View pointerEvents="box-none" className="absolute inset-x-3 gap-2" style={{ bottom }}>
+      <LiveWorkoutBar />
       <Bar {...props} current={current} />
     </View>
   );

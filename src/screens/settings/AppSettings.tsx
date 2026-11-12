@@ -16,9 +16,11 @@ import { LinkList } from "@/ui/shells/LinkList";
 import { SectionShell } from "@/ui/shells/SectionShell";
 import { APP_VERSION } from "@/queries/settings";
 import { checkForUpdate, getUpdate, setUpdateAuto, setUpdateCheck, useUpdate } from "@/state/update";
+import { setShakeEnabled, setTelemetryEnabled, shakeSetting, telemetryEnabled } from "@/lib/telemetry";
 import { cn } from "@/ui/cn";
 import { Text } from "@/ui/Text";
 import { toast } from "@/ui/Toast";
+import { WidgetSettings } from "./WidgetSettings";
 import { ROW, ROW_LABEL, ROW_RULE, ROW_VALUE, SelectRow, SmallButton, SwitchRow, type SelectOption } from "./controls";
 
 // The labels resolve when a row draws (never at import), so a language switch reaches them.
@@ -93,8 +95,8 @@ function DisplayRows({ initialTheme }: { initialTheme: Theme }) {
 }
 
 /**
- * Updates: the daily check for a newer Pulse on GitHub (src/state/update.ts), and Check now. The check is the one request
- * Pulse makes on its own, and it carries nothing about the person.
+ * Updates: the daily check for a newer Pulse on GitHub (src/state/update.ts), and Check now. The check carries nothing
+ * about the person.
  */
 function Updates() {
   const { t } = useTranslation("settings");
@@ -118,6 +120,43 @@ function Updates() {
   );
 }
 
+/**
+ * Privacy: error reports (src/lib/telemetry.ts, docs/telemetry.md), on by default; off stops them at once. Under them,
+ * the shake to report switch, shown only while reports are on (feedback goes the same way).
+ */
+function Privacy() {
+  const { t } = useTranslation("settings");
+  const [enabled, setEnabled] = useState(true);
+  const [shake, setShake] = useState(true);
+  useEffect(() => void telemetryEnabled().then(setEnabled), []);
+  useEffect(() => void shakeSetting().then(setShake), []);
+  return (
+    <SectionShell variant="card" title={t("app.privacy")}>
+      <SwitchRow
+        rule={false}
+        label={t("app.errorReports")}
+        hint={t("app.errorReportsHint")}
+        value={enabled}
+        onChange={(on) => {
+          setEnabled(on);
+          void setTelemetryEnabled(on);
+        }}
+      />
+      {enabled && (
+          <SwitchRow
+            label={t("app.shakeToReport")}
+            hint={t("app.shakeToReportHint")}
+            value={shake}
+            onChange={(on) => {
+              setShake(on);
+              void setShakeEnabled(on);
+            }}
+          />
+      )}
+    </SectionShell>
+  );
+}
+
 export function AppSettings() {
   const { t } = useTranslation("settings");
   const theme = useApp((a) => a.theme);
@@ -126,7 +165,9 @@ export function AppSettings() {
       <SectionShell variant="card" title={t("app.display")}>
         <DisplayRows initialTheme={theme} />
       </SectionShell>
+      <WidgetSettings />
       <Updates />
+      <Privacy />
       <LinkList title={t("app.group")} rows={[{ icon: Bell, label: t("app.notificationsLink"), href: "/settings?s=notifications" }]} />
     </>
   );

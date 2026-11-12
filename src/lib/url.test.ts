@@ -82,6 +82,9 @@ describe("other URL state", () => {
     expect(parentHref("/health/stress")).toBe("/health");
     expect(parentHref("/habits/abc")).toBe("/habits");
     expect(parentHref("/recovery")).toBe("/");
+    expect(tabForPath("/workout")).toBe("more");
+    expect(tabForPath("/workout-coach")).toBe("more");
+    expect(parentHref("/workout-coach")).toBe("/more");
   });
   it("weeks run Monday to Sunday", () => {
     expect(weekOf("2026-10-01")).toEqual(["2026-09-28", "2026-10-04"]);

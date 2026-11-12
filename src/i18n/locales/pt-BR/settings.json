@@ -43,7 +43,12 @@
     "checkNow": "Verificar agora",
     "latest": "O Pulse {{version}} é a versão mais recente.",
     "group": "Aplicativo",
-    "notificationsLink": "Notificações e segundo plano"
+    "notificationsLink": "Notificações e segundo plano",
+    "privacy": "Privacidade",
+    "errorReports": "Enviar relatórios de erro",
+    "errorReportsHint": "Quando o Pulse trava ou uma sincronização falha, ele envia um relatório curto: o erro, o modelo do celular e a versão do Pulse. Algumas sessões também enviam quanto tempo levam as sincronizações e as telas. Nunca seus dados de saúde. Desativar interrompe os relatórios na hora.",
+    "shakeToReport": "Agitar para relatar um problema",
+    "shakeToReportHint": "Agite o celular para nos contar o que deu errado. O Pulse envia só o que você escreve, a tela em que você estava, o modelo do celular e a versão do Pulse."
   },
   "form": {
     "optional": "Opcional"
@@ -109,7 +114,8 @@
     "menstruationPeriod": "Menstruação",
     "menstruationFlow": "Fluxo menstrual",
     "intermenstrualBleeding": "Sangramento intermenstrual",
-    "ovulationTest": "Testes de ovulação"
+    "ovulationTest": "Testes de ovulação",
+    "bloodPressure": "Pressão arterial"
   },
   "source": {
     "pastData": "Dados anteriores",
@@ -341,5 +347,16 @@
     "permissionDenied": "O Pulse precisa da permissão de localização para encontrar este ponto.",
     "locateFailed": "Não foi possível ler sua localização. Tente de novo perto de uma janela.",
     "saveFailed": "Não foi possível salvar o escritório."
+  },
+  "report": {
+    "title": "Relatar um problema",
+    "description": "Conte o que deu errado e o que você esperava. O Pulse envia o que você escreve, a tela em que você estava, o modelo do celular e a versão do Pulse. Nunca seus dados de saúde.",
+    "placeholder": "O que aconteceu?",
+    "send": "Enviar",
+    "sending": "Enviando…",
+    "failed": "Não foi possível enviar o relato. Verifique sua conexão e tente de novo.",
+    "off": "Ative “Enviar relatórios de erro” em Configurações › Aplicativo › Privacidade para enviar.",
+    "sentTitle": "Enviado",
+    "sentBody": "Obrigado. Seu relato ajuda a corrigir isso."
   }
 }

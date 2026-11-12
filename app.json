@@ -29,6 +29,7 @@
         "android.permission.health.READ_RESPIRATORY_RATE",
         "android.permission.health.READ_SKIN_TEMPERATURE",
         "android.permission.health.READ_EXERCISE",
+        "android.permission.health.WRITE_EXERCISE",
         "android.permission.health.READ_TOTAL_CALORIES_BURNED",
         "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
         "android.permission.health.READ_VO2_MAX",
@@ -42,6 +43,7 @@
         "android.permission.health.READ_HYDRATION",
         "android.permission.health.READ_NUTRITION",
         "android.permission.health.READ_BLOOD_GLUCOSE",
+        "android.permission.health.READ_BLOOD_PRESSURE",
         "android.permission.health.READ_BODY_TEMPERATURE",
         "android.permission.health.READ_MENSTRUATION",
         "android.permission.health.READ_INTERMENSTRUAL_BLEEDING",
@@ -49,7 +51,13 @@
         "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_SMS",
-        "android.permission.REQUEST_INSTALL_PACKAGES"
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
+      ],
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "com.google.android.c2dm.permission.RECEIVE"
       ]
     },
     "plugins": [
@@ -93,6 +101,8 @@
       ],
       "./plugins/withHighRefreshRate.js",
       "./plugins/withAppShortcuts.js",
+      "./plugins/withWidgets.js",
+      "./plugins/withSentryUpload.js",
       "react-native-health-connect",
       [
         "react-native-ble-plx",

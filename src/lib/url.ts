@@ -106,7 +106,7 @@ export function tabForPath(pathname: string): Tab {
   if (first === "health") return "health";
   if (first === "habits") return "habits";
   if (first === "gym") return "gym";
-  if (["more", "settings", "reports", "trends", "journal"].includes(first)) return "more";
+  if (["more", "settings", "reports", "trends", "journal", "workout", "workout-coach"].includes(first)) return "more";
   return "home";
 }
 

@@ -43,7 +43,12 @@
     "checkNow": "Check now",
     "latest": "Pulse {{version}} is the latest version.",
     "group": "App",
-    "notificationsLink": "Notifications & background"
+    "notificationsLink": "Notifications & background",
+    "privacy": "Privacy",
+    "errorReports": "Send error reports",
+    "errorReportsHint": "When Pulse crashes or a sync fails, it sends a short report: the error, the phone model and Pulse’s version. Some sessions also send how long syncs and screens take. Never your health data. Turning this off stops them at once.",
+    "shakeToReport": "Shake to report a problem",
+    "shakeToReportHint": "Shake the phone to tell us what went wrong. Pulse sends only what you write, the screen you were on, the phone model and Pulse’s version."
   },
   "form": {
     "optional": "Optional"
@@ -109,7 +114,8 @@
     "menstruationPeriod": "Periods",
     "menstruationFlow": "Period flow",
     "intermenstrualBleeding": "Spotting",
-    "ovulationTest": "Ovulation tests"
+    "ovulationTest": "Ovulation tests",
+    "bloodPressure": "Blood pressure"
   },
   "source": {
     "pastData": "Past data",
@@ -340,5 +346,16 @@
     "permissionDenied": "Pulse needs location permission to find this spot.",
     "locateFailed": "Could not read your location. Try again near a window.",
     "saveFailed": "Could not save the office."
+  },
+  "report": {
+    "title": "Report a problem",
+    "description": "Tell us what went wrong and what you expected. Pulse sends what you write, the screen you were on, the phone model and Pulse’s version. Never your health data.",
+    "placeholder": "What happened?",
+    "send": "Send",
+    "sending": "Sending…",
+    "failed": "Couldn’t send the report. Check your connection and try again.",
+    "off": "Turn on Send error reports in Settings › App › Privacy to send this.",
+    "sentTitle": "Sent",
+    "sentBody": "Thanks. Your report helps fix it."
   }
 }
