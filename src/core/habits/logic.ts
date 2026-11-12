@@ -2,42 +2,71 @@
 // exponential "habit strength" score, period completion and streaks. Pure TypeScript: tests run in Node, and the
 // home-screen widget bundle can use it without React.
 import { addDays, daysBetween } from "@/lib/time";
-import type { Habit, HabitEntry, HabitPeriod } from "./types";
+import type { Habit, HabitEntry } from "./types";
+
+const weekday = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay();
+
+/** `period: "interval"`: N days a block, at least two. */
+export function intervalDays(habit: Habit): number {
+  return Math.max(2, Math.round(habit.intervalDays || 2));
+}
+
+/** Whether a habit is due that day: weekdays only, and not before an interval habit's first day. */
+export function isScheduled(habit: Habit, day: string): boolean {
+  if (habit.period === "interval") return !habit.startDay || day >= habit.startDay;
+  if (habit.period === "day" && habit.weekdaysOnly) {
+    const dow = weekday(day);
+    return dow !== 0 && dow !== 6;
+  }
+  return true;
+}
 
 /** A week runs Monday to Sunday, as Loop's history chart does. */
-export function periodStart(day: string, period: HabitPeriod): string {
+export function periodStart(habit: Habit, day: string): string {
+  const period = habit.period;
   if (period === "day") return day;
   if (period === "month") return `${day.slice(0, 7)}-01`;
-  const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+  if (period === "interval") {
+    const n = intervalDays(habit);
+    const anchor = habit.startDay && habit.startDay <= day ? habit.startDay : day;
+    return addDays(anchor, Math.floor(daysBetween(anchor, day) / n) * n);
+  }
+  const dow = weekday(day);
   return addDays(day, -((dow + 6) % 7));
 }
 
-export function periodEnd(day: string, period: HabitPeriod): string {
+export function periodEnd(habit: Habit, day: string): string {
+  const period = habit.period;
   if (period === "day") return day;
-  if (period === "week") return addDays(periodStart(day, "week"), 6);
+  if (period === "week") return addDays(periodStart(habit, day), 6);
+  if (period === "interval") return addDays(periodStart(habit, day), intervalDays(habit) - 1);
   const [year, month] = day.split("-").map(Number);
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
 }
 
 /** The first day of the next period. */
-export function nextPeriod(day: string, period: HabitPeriod): string {
+export function nextPeriod(habit: Habit, day: string): string {
+  const period = habit.period;
   if (period === "day") return addDays(day, 1);
-  if (period === "week") return addDays(periodStart(day, "week"), 7);
+  if (period === "week") return addDays(periodStart(habit, day), 7);
+  if (period === "interval") return addDays(periodStart(habit, day), intervalDays(habit));
   const [year, month] = day.split("-").map(Number);
   return new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
 }
 
 /** Days a period is worth in the score formula; months use 30 as Loop does. */
-export const periodDays = (period: HabitPeriod) => (period === "day" ? 1 : period === "week" ? 7 : 30);
+export const periodDays = (habit: Habit) =>
+  habit.period === "day" ? 1 : habit.period === "week" ? 7 : habit.period === "month" ? 30 : intervalDays(habit);
 
 export function entryMap(entries: readonly HabitEntry[]): Map<string, HabitEntry> {
   return new Map(entries.map((e) => [e.day, e]));
 }
 
-export type DayState = { state: "empty" | "done" | "no" | "skip"; value: number | null };
+export type DayState = { state: "empty" | "done" | "no" | "skip" | "off"; value: number | null };
 
-/** What one day shows: no entry, done, not done, or skipped. Numeric days carry their amount. */
+/** What one day shows: no entry, done, not done, skipped, or not scheduled (a weekend of a weekday habit). */
 export function dayState(habit: Habit, entries: Map<string, HabitEntry>, day: string): DayState {
+  if (!isScheduled(habit, day)) return { state: "off", value: null };
   const e = entries.get(day);
   if (!e) return { state: "empty", value: null };
   if (e.skip) return { state: "skip", value: e.value };
@@ -58,11 +87,12 @@ export type PeriodSummary = {
 
 /** A period's total against its target: the card's "3/7 this week", the streak's step and the summary's count. */
 export function periodSummary(habit: Habit, entries: Map<string, HabitEntry>, day: string): PeriodSummary {
-  const start = periodStart(day, habit.period);
-  const end = periodEnd(day, habit.period);
+  const start = periodStart(habit, day);
+  const end = periodEnd(habit, day);
   let sum = 0;
   let hasData = false;
   for (let d = start; d <= end; d = addDays(d, 1)) {
+    if (!isScheduled(habit, d)) continue;
     const e = entries.get(d);
     if (!e || e.skip) continue;
     hasData = true;
@@ -76,7 +106,7 @@ export function periodSummary(habit: Habit, entries: Map<string, HabitEntry>, da
  * The score's multiplier (Score.compute): a day with nothing done pulls the score down, a completed day pulls it up,
  * and the weight of today grows with the frequency. 3 times a week moves more slowly than every day.
  */
-const multiplierOf = (habit: Habit) => Math.pow(0.5, Math.sqrt((habit.kind === "numeric" ? 1 / periodDays(habit.period) : habit.target / periodDays(habit.period))) / 13);
+const multiplierOf = (habit: Habit) => Math.pow(0.5, Math.sqrt((habit.kind === "numeric" ? 1 / periodDays(habit) : habit.target / periodDays(habit))) / 13);
 
 /**
  * The daily habit-strength score over [from, to], 0 to 1, one value per day. The series is warmed up from up to 400
@@ -84,7 +114,7 @@ const multiplierOf = (habit: Habit) => Math.pow(0.5, Math.sqrt((habit.kind === "
  *
  * Yes/no habits count done days in a window of the period (doubled for weekly and monthly habits, as Loop does, so
  * the day a weekly habit is done does not jolt the score). Numeric habits sum their amount in that window. Skips take
- * the day out of both the window and the score.
+ * the day out of both the window and the score; so do weekends of a weekdays-only habit.
  */
 export function scoreSeries(habit: Habit, entries: Map<string, HabitEntry>, from: string, to: string): Map<string, number> {
   const values = new Map<string, number>();
@@ -94,15 +124,15 @@ export function scoreSeries(habit: Habit, entries: Map<string, HabitEntry>, from
   const warm = addDays(from, -400);
   const start = earliest && earliest > warm ? earliest : warm;
   const yesNo = habit.kind === "yes_no";
-  const freq = yesNo ? habit.target / periodDays(habit.period) : 1 / periodDays(habit.period);
-  const windowLength = yesNo && freq < 1 ? periodDays(habit.period) * 2 : periodDays(habit.period);
+  const freq = yesNo ? habit.target / periodDays(habit) : 1 / periodDays(habit);
+  const windowLength = yesNo && freq < 1 ? periodDays(habit) * 2 : periodDays(habit);
   const windowTarget = yesNo && freq < 1 ? habit.target * 2 : habit.target;
   const multiplier = multiplierOf(habit);
   const queue: number[] = [];
   let previous = habit.kind === "numeric" && habit.targetType === "at_most" ? 1 : 0;
   for (let day = start; day <= to; day = addDays(day, 1)) {
     const e = entries.get(day);
-    if (!e || e.skip) {
+    if (!isScheduled(habit, day) || !e || e.skip) {
       if (day >= from) values.set(day, previous);
       continue;
     }
@@ -126,24 +156,29 @@ export function scoreOn(habit: Habit, entries: Map<string, HabitEntry>, day: str
 }
 
 /**
- * Current and best streaks in periods: days for a daily habit, weeks for a weekly one, months for a monthly one. A
- * period counts when it met its target and had an entry; the current, unfinished period does not break a streak yet.
+ * Current and best streaks in periods: days for a daily habit, weeks for a weekly one, months for a monthly one, and
+ * N-day blocks for an interval habit. A period counts when it met its target and had an entry; the current, unfinished
+ * period does not break a streak yet. Weekends of a weekdays-only habit are left out, so Friday and Monday touch.
  */
 export function streaks(habit: Habit, entries: Map<string, HabitEntry>, today: string): { current: number; best: number } {
   const days = [...entries.keys()].sort();
   if (!days.length) return { current: 0, best: 0 };
-  const first = periodStart(days[0], habit.period);
-  const last = periodStart(today, habit.period);
+  const first = periodStart(habit, days[0]);
+  const last = periodStart(habit, today);
   const done: boolean[] = [];
   let d = first;
   while (d <= last) {
+    if (!isScheduled(habit, d)) {
+      d = nextPeriod(habit, d);
+      continue;
+    }
     const summary = periodSummary(habit, entries, d);
     done.push(summary.completed && summary.hasData);
-    d = nextPeriod(d, habit.period);
+    d = nextPeriod(habit, d);
   }
   let current = 0;
   let i = done.length - 1;
-  if (!done[i]) i--;
+  if (isScheduled(habit, today) && !done[i]) i--;
   while (i >= 0 && done[i]) {
     current++;
     i--;
@@ -166,19 +201,23 @@ export type HabitStats = {
   period: PeriodSummary;
   /** The current period is met (a weekly habit may be done without an entry today). */
   done: boolean;
+  /** The habit is due today (false on the weekend of a weekdays-only habit). */
+  scheduled: boolean;
 };
 
 export function habitStats(habit: Habit, all: readonly HabitEntry[], today: string): HabitStats {
   const entries = entryMap(all.filter((e) => e.habitId === habit.id));
   const summary = periodSummary(habit, entries, today);
   const streak = streaks(habit, entries, today);
+  const scheduled = isScheduled(habit, today);
   return {
     score: scoreOn(habit, entries, today),
     current: streak.current,
     best: streak.best,
     today: dayState(habit, entries, today),
     period: summary,
-    done: summary.completed && summary.hasData,
+    done: scheduled && summary.completed && summary.hasData,
+    scheduled,
   };
 }
 

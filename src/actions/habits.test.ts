@@ -59,8 +59,25 @@ describe("a habit", () => {
     expect(entry.ok && entry.data.value).toBe(3.46);
   });
 
-  it("archives and deletes with its entries", async () => {
-    const res = await saveHabit(store, input(), NOW);
+  it("stores every-N-days and weekdays-only schedules", async () => {
+    const interval = await saveHabit(store, input({ period: "interval", intervalDays: 3, target: 5 }), NOW);
+    if (!interval.ok) throw new Error("habit");
+    expect(interval.data).toMatchObject({ period: "interval", intervalDays: 3, target: 1, weekdaysOnly: false, startDay: "2026-11-02" });
+    const weekdays = await saveHabit(store, input({ name: "Gym", weekdaysOnly: true }), NOW);
+    if (!weekdays.ok) throw new Error("habit");
+    expect(weekdays.data.weekdaysOnly).toBe(true);
+    expect(await toggleHabit(store, weekdays.data, "2026-10-31", NOW)).toBeNull();
+    expect(await store.habitEntries()).toEqual([]);
+    const weekly = await saveHabit(store, input({ period: "week", weekdaysOnly: true }), NOW);
+    expect(weekly.ok && weekly.data.weekdaysOnly).toBe(false);
+  });
+
+  it("rejects an interval outside 2 to 365 days", async () => {
+    expect(await saveHabit(store, input({ period: "interval", intervalDays: 1 }), NOW)).toEqual({ ok: false, error: "invalid" });
+    expect(await saveHabit(store, input({ period: "interval", intervalDays: 366 }), NOW)).toEqual({ ok: false, error: "invalid" });
+  });
+
+  it("archives and deletes with its entries", async () => {    const res = await saveHabit(store, input(), NOW);
     if (!res.ok) throw new Error("habit");
     await toggleHabit(store, res.data, "2026-11-02", NOW);
     await archiveHabit(store, res.data.id, true, NOW + 1);

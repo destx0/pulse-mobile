@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "@/lib/time";
 import type { Habit, HabitEntry } from "./types";
-import { habitStats, periodSummary, scoreOn, scoreSeries, streaks } from "./logic";
+import { dayState, habitStats, periodSummary, periodStart, scoreOn, scoreSeries, streaks } from "./logic";
 
 const TODAY = "2026-11-02";
 const habit = (over: Partial<Habit> = {}): Habit => ({
@@ -12,6 +12,9 @@ const habit = (over: Partial<Habit> = {}): Habit => ({
   kind: "yes_no",
   color: "optimal",
   period: "day",
+  intervalDays: 1,
+  weekdaysOnly: false,
+  startDay: "2026-01-01",
   target: 1,
   targetType: "at_least",
   unit: null,
@@ -59,6 +62,20 @@ describe("periods and targets", () => {
     const monday = "2026-10-26";
     const entries = map([monday, addDays(monday, 2), addDays(monday, 4)].map((d) => entry(d)));
     expect(periodSummary(h, entries, "2026-10-30")).toMatchObject({ start: monday, sum: 3, target: 3, completed: true, hasData: true });
+  });
+
+  it("blocks an every-N-days habit from its start day", () => {
+    const h = habit({ period: "interval", intervalDays: 3, startDay: "2026-11-01", target: 1 });
+    expect(periodStart(h, "2026-11-06")).toBe("2026-11-04");
+    expect(periodSummary(h, map([entry("2026-11-05")]), "2026-11-05")).toMatchObject({ start: "2026-11-04", end: "2026-11-06", sum: 1, completed: true });
+    expect(streaks(h, map([entry("2026-11-01"), entry("2026-11-04")]), "2026-11-05")).toMatchObject({ current: 2, best: 2 });
+  });
+
+  it("leaves the weekend out of a weekdays-only habit", () => {
+    const h = habit({ weekdaysOnly: true });
+    expect(dayState(h, map([]), "2026-10-31")).toEqual({ state: "off", value: null });
+    expect(periodSummary(h, map([]), "2026-10-31")).toMatchObject({ hasData: false, completed: false });
+    expect(streaks(h, map([entry("2026-10-30"), entry("2026-11-02")]), TODAY)).toMatchObject({ current: 2, best: 2 });
   });
 
   it("completes a numeric daily habit when the amount reaches its target", () => {

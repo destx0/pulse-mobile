@@ -96,8 +96,9 @@ create table if not exists gym_measurements (id text primary key, day text not n
 create table if not exists gym_import (id integer primary key check (id = 1), data text not null);
 create table if not exists habits (
   id text primary key, name text not null, question text, notes text, kind text not null, color text not null,
-  period text not null, target real not null, target_type text not null, unit text, position integer not null,
-  archived integer not null default 0, created_at integer not null, updated_at integer not null
+  period text not null, interval_days integer not null default 1, weekdays_only integer not null default 0,
+  start_day text not null default '', target real not null, target_type text not null, unit text,
+  position integer not null, archived integer not null default 0, created_at integer not null, updated_at integer not null
 );
 create table if not exists habit_entries (
   habit_id text not null, day text not null, value real not null, skip integer not null default 0, note text,
@@ -133,6 +134,10 @@ const MIGRATIONS: Migration[] = [
   { sql: "alter table profile add column display text", table: "profile", column: "display" },
   // Supersets: two exercises of a session sharing an id.
   { sql: "alter table gym_sets add column superset_id text", table: "gym_sets", column: "superset_id" },
+  // Habit schedules: every N days and weekdays only.
+  { sql: "alter table habits add column interval_days integer not null default 1", table: "habits", column: "interval_days" },
+  { sql: "alter table habits add column weekdays_only integer not null default 0", table: "habits", column: "weekdays_only" },
+  { sql: "alter table habits add column start_day text not null default ''", table: "habits", column: "start_day" },
 ];
 
 /** The columns the app reads unconditionally; checked after the migrations so a half-applied schema cannot boot. */
@@ -142,6 +147,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   profile: ["name", "photo", "sleep_goal", "display"],
   hr_days: ["minute"],
   gym_sets: ["superset_id"],
+  habits: ["interval_days", "weekdays_only", "start_day"],
 };
 
 const DAY = 86_400;
@@ -997,9 +1003,9 @@ class SqliteStore implements Store {
   }
   async putHabit(h: Habit) {
     await this.db.runAsync(
-      `insert or replace into habits (id, name, question, notes, kind, color, period, target, target_type, unit, position, archived, created_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [h.id, h.name, h.question, h.notes, h.kind, h.color, h.period, h.target, h.targetType, h.unit, h.position, bool(h.archived), h.createdAt, h.updatedAt],
+      `insert or replace into habits (id, name, question, notes, kind, color, period, interval_days, weekdays_only, start_day, target, target_type, unit, position, archived, created_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [h.id, h.name, h.question, h.notes, h.kind, h.color, h.period, h.intervalDays, bool(h.weekdaysOnly), h.startDay, h.target, h.targetType, h.unit, h.position, bool(h.archived), h.createdAt, h.updatedAt],
     );
   }
   async deleteHabit(id: string) {
@@ -1061,6 +1067,7 @@ type GymMeasurementRow = { id: string; day: string; kind: string; value: number 
 // ── the habits' row shapes ─────────────────────────────────────────────────────────────────────────────────────────
 type HabitRow = {
   id: string; name: string; question: string | null; notes: string | null; kind: string; color: string; period: string;
+  interval_days: number; weekdays_only: number; start_day: string;
   target: number; target_type: string; unit: string | null; position: number; archived: number; created_at: number; updated_at: number;
 };
 type HabitEntryRow = { habit_id: string; day: string; value: number; skip: number; note: string | null; updated_at: number };
@@ -1072,7 +1079,10 @@ const habitOf = (r: HabitRow): Habit => ({
   notes: r.notes,
   kind: r.kind === "numeric" ? "numeric" : "yes_no",
   color: r.color as Habit["color"],
-  period: r.period === "week" ? "week" : r.period === "month" ? "month" : "day",
+  period: r.period === "week" ? "week" : r.period === "month" ? "month" : r.period === "interval" ? "interval" : "day",
+  intervalDays: r.interval_days,
+  weekdaysOnly: r.weekdays_only === 1,
+  startDay: r.start_day,
   target: r.target,
   targetType: r.target_type === "at_most" ? "at_most" : "at_least",
   unit: r.unit,

@@ -5,6 +5,7 @@ import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Archive, ArchiveRestore, CircleCheckBig, LayoutGrid, MoreHorizontal, Pencil, Plus, SkipForward, Trash2, type LucideIcon } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
+import { habitIcon } from "@/core/habits/icons";
 import type { HabitCardVM, HabitsVM } from "@/queries/habits";
 import { getHabits } from "@/queries/habits";
 import { archiveHabit, clearHabitEntry, deleteHabit, setHabitEntry, skipHabitDay, toggleHabit } from "@/actions/habits";
@@ -176,7 +177,7 @@ function Summary({ vm }: { vm: HabitsVM }) {
       </HabitRing>
       <View className="min-w-0 flex-1 gap-0.5">
         <Text className={LABEL}>{t("title")}</Text>
-        <Text className="text-[15px] leading-[22px]">{done === total ? t("summary.allDone") : t("summary.line", { done, total })}</Text>
+        <Text className="text-[15px] leading-[22px]">{total === 0 ? t("summary.noneToday") : done === total ? t("summary.allDone") : t("summary.line", { done, total })}</Text>
       </View>
     </Card>
   );
@@ -209,6 +210,7 @@ function HabitCard({
         <HabitRing value={card.stats.score} color={color} size={46}>
           <Text className="font-numeric text-[11px] font-bold leading-4">{Math.round(card.stats.score * 100)}</Text>
         </HabitRing>
+        <Text className="text-[20px] leading-6">{habitIcon(card.habit)}</Text>
         <Press accessibilityRole="link" accessibilityLabel={card.habit.name} onPress={() => push(`/habits/${card.habit.id}`)} className="min-w-0 flex-1 gap-0.5">
           <Text className="shrink text-[17px] font-semibold leading-[22px]" numberOfLines={1}>
             {card.habit.name}
@@ -218,7 +220,7 @@ function HabitCard({
             {current > 0 ? ` · ${streakText(card.habit, current)}` : ""}
           </Text>
         </Press>
-        <Press accessibilityRole="button" accessibilityLabel={t("card.today")} onPress={() => void onToggle(card.habit, today)} className="size-11 items-center justify-center">
+        <Press accessibilityRole="button" accessibilityLabel={t("card.today")} disabled={!card.stats.scheduled} accessibilityState={{ disabled: !card.stats.scheduled }} onPress={() => void onToggle(card.habit, today)} className="size-11 items-center justify-center">
           <DayMark habit={card.habit} state={card.stats.today} color={color} size={34} today />
         </Press>
         <View ref={menuRef} collapsable={false}>
@@ -229,7 +231,7 @@ function HabitCard({
       </View>
       <View className="flex-row">
         {card.week.map((d) => (
-          <Press key={d.day} accessibilityRole="button" accessibilityLabel={formatDay(d.day, { weekday: "long" })} onPress={() => void onToggle(card.habit, d.day)} className="flex-1 items-center gap-1.5 py-1">
+          <Press key={d.day} accessibilityRole="button" accessibilityLabel={formatDay(d.day, { weekday: "long" })} disabled={d.state.state === "off"} accessibilityState={{ disabled: d.state.state === "off" }} onPress={() => void onToggle(card.habit, d.day)} className="flex-1 items-center gap-1.5 py-1">
             <Text className={cn("text-[10px] font-semibold uppercase leading-3 tracking-[0.04em]", d.day === today ? "text-foreground" : "text-muted-foreground")}>{formatDay(d.day, { weekday: "narrow" })}</Text>
             <DayMark habit={card.habit} state={d.state} color={color} today={d.day === today} />
           </Press>

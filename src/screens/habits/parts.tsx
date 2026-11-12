@@ -22,15 +22,16 @@ export const habitColor = (c: Palette, color: HabitColor) => c[color];
 
 const round = (v: number) => (Math.round(v * 10) / 10).toString();
 
-/** A day in the card's week row: a filled check, a cross, a dash or an empty circle. Numeric days carry their amount. */
+/** A day in the card's week row: a filled check, a cross, a dash, an empty circle, or a faint dot off-schedule. */
 export function DayMark({ habit, state, color, size = 26, today }: { habit: Habit; state: DayState; color: string; size?: number; today?: boolean }) {
   const value = state.value;
   const numeric = habit.kind === "numeric";
   const filled = state.state === "done";
+  const off = state.state === "off";
   return (
     <View
       className={cn("items-center justify-center rounded-full border", today && "border-2")}
-      style={{ width: size, height: size, borderColor: today ? color : filled ? color : "rgba(128,128,128,0.45)", backgroundColor: filled ? color : "transparent" }}
+      style={{ width: size, height: size, borderColor: filled ? color : off ? "rgba(128,128,128,0.2)" : today ? color : "rgba(128,128,128,0.45)", backgroundColor: filled ? color : "transparent" }}
     >
       {filled ? (
         numeric ? (
@@ -40,6 +41,8 @@ export function DayMark({ habit, state, color, size = 26, today }: { habit: Habi
         ) : (
           <Icon icon={Check} size={14} tone="background" strokeWidth={3} />
         )
+      ) : off ? (
+        <View className="size-1 rounded-full bg-muted-foreground/40" />
       ) : state.state === "no" ? (
         <Icon icon={X} size={12} tone="muted-foreground" strokeWidth={2.5} />
       ) : state.state === "skip" ? (

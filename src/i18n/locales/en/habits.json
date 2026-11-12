@@ -5,7 +5,8 @@
   "summary": {
     "line": "{{done}} of {{total}} done",
     "allDone": "Every habit done",
-    "none": "Start with one habit"
+    "none": "Start with one habit",
+    "noneToday": "Nothing due today"
   },
   "empty": "No habits yet",
   "emptyBody": "Add a habit and tick it each day. Its score and streak build as you go.",
@@ -16,16 +17,20 @@
     "timesDay": "{{done}}/{{target}} today",
     "timesWeek": "{{done}}/{{target}} this week",
     "timesMonth": "{{done}}/{{target}} this month",
+    "timesInterval": "{{done}}/{{target}} every {{days}} days",
     "amountDay": "{{value}}/{{target}} {{unit}} today",
     "amountWeek": "{{value}}/{{target}} {{unit}} this week",
     "amountMonth": "{{value}}/{{target}} {{unit}} this month",
+    "amountInterval": "{{value}}/{{target}} {{unit}} every {{days}} days",
     "amountPlainDay": "{{value}}/{{target}} today",
     "amountPlainWeek": "{{value}}/{{target}} this week",
     "amountPlainMonth": "{{value}}/{{target}} this month",
+    "amountPlainInterval": "{{value}}/{{target}} every {{days}} days",
     "streak": "{{value}} {{unit}}",
     "noStreak": "No streak yet",
     "today": "Today",
-    "skip": "Skipped"
+    "skip": "Skipped",
+    "weekdays": "Weekdays only"
   },
   "streak_day_one": "{{count}} day",
   "streak_day_other": "{{count}} days",
@@ -33,6 +38,8 @@
   "streak_week_other": "{{count}} weeks",
   "streak_month_one": "{{count}} month",
   "streak_month_other": "{{count}} months",
+  "streak_interval_one": "{{count}} period",
+  "streak_interval_other": "{{count}} periods",
   "menu": {
     "label": "Habit options",
     "edit": "Edit habit",
@@ -92,6 +99,12 @@
     "period_day": "Every day",
     "period_week": "Every week",
     "period_month": "Every month",
+    "period_interval": "Every N days",
+    "schedule": "Days",
+    "everyDay": "Every day",
+    "weekdaysOnly": "Weekdays only",
+    "intervalDays": "Days",
+    "everyNDays": "Every {{count}} days",
     "target": "Target",
     "targetTimes": "Times per period",
     "targetAmount": "Amount per period",
@@ -104,6 +117,7 @@
     "saving": "Saving…",
     "saved": "Habit saved",
     "invalid": "Give the habit a name and a target above zero.",
+    "invalidDays": "Choose between 2 and 365 days.",
     "saveFailed": "The habit could not be saved."
   },
   "value": {
@@ -122,7 +136,7 @@
     "noHabits": "Add a habit in Pulse first.",
     "help": "Widgets",
     "helpTitle": "Habit widgets",
-    "helpBody": "Long-press your home screen, choose Widgets, then Pulse. Pick a habit tick, score, streak or history widget and choose its habit. Today's habits shows the whole list.",
+    "helpBody": "Long-press your home screen, choose Widgets, then Pulse. Pick a habit tick, dot, score, streak or history widget and choose its habit. Today's habits shows the whole list.",
     "cancel": "Cancel",
     "today": "Today's habits",
     "done": "{{done}} of {{total}} done",

@@ -11,7 +11,7 @@ import { addDays, localDay } from "@/lib/time";
 import { habitWidgetKey } from "./configKeys";
 import { widgetRepresentation, type HabitWidgetView, type TodayView } from "./views";
 
-export const HABIT_WIDGETS = ["HabitCheck", "HabitScore", "HabitStreak", "HabitHistory", "HabitToday"] as const;
+export const HABIT_WIDGETS = ["HabitDot", "HabitCheck", "HabitScore", "HabitStreak", "HabitHistory", "HabitToday"] as const;
 
 export type WidgetSnapshot = { today: string; habits: Habit[]; entries: HabitEntry[] };
 
@@ -36,9 +36,8 @@ export function habitView(snapshot: WidgetSnapshot, habitId: string): HabitWidge
 }
 
 export function todayView(snapshot: WidgetSnapshot): TodayView {
-  const cards = habitCards(snapshot.habits, snapshot.entries, snapshot.today);
-  const done = cards.filter((c) => c.stats.done).length;
-  return { cards: cards.map((c) => ({ habit: c.habit, stats: c.stats })), done, total: cards.length };
+  const cards = habitCards(snapshot.habits, snapshot.entries, snapshot.today).filter((c) => c.stats.scheduled);
+  return { cards: cards.map((c) => ({ habit: c.habit, stats: c.stats })), done: cards.filter((c) => c.stats.done).length, total: cards.length };
 }
 
 /** The widget's current props: its name decides the view, its stored habit decides which one. */

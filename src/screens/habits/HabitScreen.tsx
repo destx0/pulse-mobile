@@ -6,6 +6,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Trash2 } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
+import { habitIcon } from "@/core/habits/icons";
 import type { DayState } from "@/core/habits/logic";
 import { addDays } from "@/lib/time";
 import { periodText, streakText } from "@/lib/habits";
@@ -102,6 +103,7 @@ export function HabitScreen() {
           <View className="gap-4">
             <Card className="items-center gap-4 px-4 py-5">
               <CardFill />
+              <Text className="text-[30px] leading-9">{habitIcon(habit)}</Text>
               <HabitRing value={stats.score} color={color} size={132} stroke={10}>
                 <View className="items-center">
                   <Text className="font-numeric text-[34px] font-bold leading-10">{Math.round(stats.score * 100)}%</Text>
@@ -200,16 +202,19 @@ function HistoryGrid({ habit, days, today, onDay }: { habit: Habit; days: { day:
             {week.map((day) => {
               const state: DayState = byDay.get(day) ?? { state: "empty", value: null };
               const future = day > today;
+              const off = state.state === "off";
+              const disabled = future || off;
               const done = state.state === "done";
               return (
                 <Press
                   key={day}
-                  disabled={future}
+                  disabled={disabled}
                   accessibilityRole="button"
                   accessibilityLabel={day}
+                  accessibilityState={{ disabled }}
                   onPress={() => onDay(day, state)}
                   className="w-full items-center justify-center"
-                  style={{ height: 13, borderRadius: 3, backgroundColor: future ? "transparent" : done ? color : state.state === "skip" ? c.secondary : state.state === "no" ? c.muted : c.secondary, borderWidth: day === today ? 1.5 : 0, borderColor: color }}
+                  style={{ height: 13, borderRadius: 3, backgroundColor: disabled ? "transparent" : done ? color : state.state === "skip" ? c.secondary : state.state === "no" ? c.muted : c.secondary, borderWidth: day === today ? 1.5 : 0, borderColor: color }}
                 >
                   {state.state === "skip" && <View className="h-px w-1.5" style={{ backgroundColor: c["muted-foreground"] }} />}
                 </Press>

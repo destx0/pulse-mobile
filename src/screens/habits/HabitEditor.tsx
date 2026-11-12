@@ -54,6 +54,8 @@ function HabitForm({ habit }: { habit: Habit | null }) {
   const [kind, setKind] = useState<HabitKind>(habit?.kind ?? "yes_no");
   const [color, setColor] = useState<HabitColor>(habit?.color ?? "optimal");
   const [period, setPeriod] = useState<HabitPeriod>(habit?.period ?? "day");
+  const [intervalDays, setIntervalDays] = useState(String(habit?.intervalDays && habit.intervalDays > 1 ? habit.intervalDays : 2));
+  const [weekdaysOnly, setWeekdaysOnly] = useState(habit?.weekdaysOnly ?? false);
   const [target, setTarget] = useState(String(habit?.target ?? 1));
   const [targetType, setTargetType] = useState<HabitTargetType>(habit?.targetType ?? "at_least");
   const [unit, setUnit] = useState(habit?.unit ?? "");
@@ -61,12 +63,18 @@ function HabitForm({ habit }: { habit: Habit | null }) {
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
+    const days = parseInt(intervalDays, 10);
+    if (period === "interval" && (!Number.isFinite(days) || days < 2 || days > 365)) {
+      haptic.error();
+      setError(t("editor.invalidDays"));
+      return;
+    }
     setSaving(true);
     setError(null);
     const amount = parseFloat(target.replace(",", "."));
     const res = await saveHabit(
       actionCtx().store,
-      { id: habit?.id, name, question, notes, kind, color, period, target: Number.isFinite(amount) ? amount : 0, targetType, unit },
+      { id: habit?.id, name, question, notes, kind, color, period, intervalDays: days, weekdaysOnly, target: Number.isFinite(amount) ? amount : 0, targetType, unit },
       nowS(),
     ).catch(() => ({ ok: false as const, error: "invalid" as const }));
     setSaving(false);
@@ -134,20 +142,43 @@ function HabitForm({ habit }: { habit: Habit | null }) {
               ["day", t("editor.period_day")],
               ["week", t("editor.period_week")],
               ["month", t("editor.period_month")],
+              ["interval", t("editor.period_interval")],
             ]}
             value={period}
-            onChange={(v) => v && setPeriod(v as HabitPeriod)}
+            onChange={(v) => {
+              if (!v) return;
+              setPeriod(v as HabitPeriod);
+              if (v !== "day") setWeekdaysOnly(false);
+            }}
           />
-          <View className="flex-row gap-2">
-            <Field label={kind === "numeric" ? t("editor.targetAmount") : t("editor.targetTimes")} className="flex-1">
-              <Input value={target} onChangeText={(v) => (setTarget(v), setError(null))} keyboardType={kind === "numeric" ? "decimal-pad" : "numeric"} accessibilityLabel={t("editor.target")} className="text-base tabular-nums" />
+          {period === "day" && (
+            <Chips
+              label={t("editor.schedule")}
+              options={[
+                ["every", t("editor.everyDay")],
+                ["weekdays", t("editor.weekdaysOnly")],
+              ]}
+              value={weekdaysOnly ? "weekdays" : "every"}
+              onChange={(v) => setWeekdaysOnly(v === "weekdays")}
+            />
+          )}
+          {period === "interval" && (
+            <Field label={t("editor.intervalDays")}>
+              <Input value={intervalDays} onChangeText={(v) => (setIntervalDays(v), setError(null))} keyboardType="numeric" accessibilityLabel={t("editor.intervalDays")} className="text-base tabular-nums" />
             </Field>
-            {kind === "numeric" && (
-              <Field label={t("editor.unit")} className="flex-1">
-                <Input value={unit} onChangeText={setUnit} placeholder={t("editor.unitPlaceholder")} maxLength={20} accessibilityLabel={t("editor.unit")} className="text-base" />
+          )}
+          {(kind === "numeric" || period !== "interval") && (
+            <View className="flex-row gap-2">
+              <Field label={kind === "numeric" ? t("editor.targetAmount") : t("editor.targetTimes")} className="flex-1">
+                <Input value={target} onChangeText={(v) => (setTarget(v), setError(null))} keyboardType={kind === "numeric" ? "decimal-pad" : "numeric"} accessibilityLabel={t("editor.target")} className="text-base tabular-nums" />
               </Field>
-            )}
-          </View>
+              {kind === "numeric" && (
+                <Field label={t("editor.unit")} className="flex-1">
+                  <Input value={unit} onChangeText={setUnit} placeholder={t("editor.unitPlaceholder")} maxLength={20} accessibilityLabel={t("editor.unit")} className="text-base" />
+                </Field>
+              )}
+            </View>
+          )}
           {kind === "numeric" && (
             <Chips
               label={t("editor.targetType")}

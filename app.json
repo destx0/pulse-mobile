@@ -132,6 +132,18 @@
         {
           "widgets": [
             {
+              "name": "HabitDot",
+              "label": "Habit dot",
+              "description": "One habit as a small icon with its tick.",
+              "minWidth": "40dp",
+              "minHeight": "40dp",
+              "targetCellWidth": 1,
+              "targetCellHeight": 1,
+              "resizeMode": "none",
+              "widgetFeatures": "reconfigurable",
+              "updatePeriodMillis": 1800000
+            },
+            {
               "name": "HabitCheck",
               "label": "Habit tick",
               "description": "One habit and its tick: tap to mark today done.",

@@ -4,6 +4,7 @@
 import { FlexWidget, SvgWidget, TextWidget, type WidgetRepresentation } from "react-native-android-widget";
 import type { DayState, HabitStats } from "@/core/habits/logic";
 import type { Habit } from "@/core/habits/types";
+import { habitIcon } from "@/core/habits/icons";
 import { i18n } from "@/i18n/config";
 import { periodText, streakText } from "@/lib/habits";
 import { addDays } from "@/lib/time";
@@ -57,19 +58,19 @@ const openHabit = (habit: Habit) => ({ clickAction: "OPEN_URI" as const, clickAc
 function Check({ view, theme }: { view: HabitWidgetView; theme: Theme }) {
   const { habit, stats } = view;
   const done = stats.today.state === "done";
+  const off = !stats.scheduled;
   const numeric = habit.kind === "numeric";
   const circle = (
     <FlexWidget
       style={{ width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", backgroundColor: done ? accent(habit, theme) : "#00000000", borderWidth: done ? 0 : 2, borderColor: muted(theme) }}
       {...(numeric ? openHabit(habit) : { clickAction: "toggle", clickActionData: { habitId: habit.id } })}
-      accessibilityLabel={`${habit.name}, ${i18n.t(done ? "habits:card.doneToday" : "habits:card.notDoneToday")}`}
+      accessibilityLabel={`${habit.name}, ${i18n.t(!stats.scheduled ? "habits:card.weekdays" : done ? "habits:card.doneToday" : "habits:card.notDoneToday")}`}
     >
-      <TextWidget text={numeric ? String(stats.today.value ?? "—") : done ? "✓" : ""} style={{ fontSize: numeric ? 22 : 36, fontWeight: "bold", color: done ? "#ffffff" : muted(theme), textAlign: "center" }} allowFontScaling={false} />
+      <TextWidget text={off ? "–" : numeric ? String(stats.today.value ?? "—") : done ? "✓" : ""} style={{ fontSize: off ? 26 : numeric ? 22 : 36, fontWeight: "bold", color: done ? "#ffffff" : muted(theme), textAlign: "center" }} allowFontScaling={false} />
     </FlexWidget>
-  );
-  return (
+  );  return (
     <FlexWidget style={shell(theme)} {...openHabit(habit)}>
-      <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
+      <TextWidget text={`${habitIcon(habit)} ${habit.name}`} maxLines={2} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
       <FlexWidget style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "match_parent" }}>
         {circle}
         <FlexWidget style={{ alignItems: "flex-end", justifyContent: "center" }}>
@@ -89,7 +90,7 @@ function Score({ view, theme }: { view: HabitWidgetView; theme: Theme }) {
     <FlexWidget style={shell(theme)} {...openHabit(habit)}>
       <FlexWidget style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", alignItems: "center" }}>
         <FlexWidget style={{ flex: 1 }}>
-          <TextWidget text={habit.name} maxLines={1} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
+          <TextWidget text={`${habitIcon(habit)} ${habit.name}`} maxLines={1} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
         </FlexWidget>
         <TextWidget text={streakText(habit, stats.current)} style={{ fontSize: 10, color: muted(theme) }} allowFontScaling={false} />
       </FlexWidget>
@@ -107,7 +108,7 @@ function Streak({ view, theme }: { view: HabitWidgetView; theme: Theme }) {
   const { habit, stats } = view;
   return (
     <FlexWidget style={shell(theme)} {...openHabit(habit)}>
-      <TextWidget text={habit.name} maxLines={2} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
+      <TextWidget text={`${habitIcon(habit)} ${habit.name}`} maxLines={2} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
       <TextWidget text={String(stats.current)} style={{ fontSize: 40, fontWeight: "bold", color: accent(habit, theme), textAlign: "center" }} allowFontScaling={false} />
       <FlexWidget style={{ alignItems: "center", width: "match_parent" }}>
         <TextWidget text={streakText(habit, stats.current)} style={{ fontSize: 11, color: muted(theme) }} allowFontScaling={false} />
@@ -133,7 +134,7 @@ function History({ view, theme }: { view: HabitWidgetView; theme: Theme }) {
   const shown = weeks.slice(-10);
   return (
     <FlexWidget style={shell(theme)} {...openHabit(habit)}>
-      <TextWidget text={habit.name} maxLines={1} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
+      <TextWidget text={`${habitIcon(habit)} ${habit.name}`} maxLines={1} truncate="END" style={{ fontSize: 13, fontWeight: "600", color: fg(theme) }} allowFontScaling={false} />
       <FlexWidget style={{ flexDirection: "row", justifyContent: "space-between", width: "match_parent", flex: 1 }}>
         {shown.map((week) => (
           <FlexWidget key={week[0]} style={{ flexDirection: "column", flexGap: 2 }}>
@@ -157,25 +158,26 @@ function Today({ view, theme }: { view: TodayView; theme: Theme }) {
     <FlexWidget style={shell(theme)} clickAction="OPEN_URI" clickActionData={{ uri: "pulse://habits" }}>
       <FlexWidget style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "match_parent" }}>
         <TextWidget text={i18n.t("habits:widget.today")} style={{ fontSize: 13, fontWeight: "700", color: fg(theme) }} allowFontScaling={false} />
-        <TextWidget text={i18n.t("habits:widget.done", { done: view.done, total: view.total })} style={{ fontSize: 10, color: muted(theme) }} allowFontScaling={false} />
+        <TextWidget text={view.total === 0 ? i18n.t("habits:summary.noneToday") : i18n.t("habits:widget.done", { done: view.done, total: view.total })} style={{ fontSize: 10, color: muted(theme) }} allowFontScaling={false} />
       </FlexWidget>
       {shown.length === 0 ? (
-        <TextWidget text={i18n.t("habits:empty")} style={{ fontSize: 12, color: muted(theme) }} allowFontScaling={false} />
+        <TextWidget text={i18n.t("habits:summary.noneToday")} style={{ fontSize: 12, color: muted(theme) }} allowFontScaling={false} />
       ) : (
         <FlexWidget style={{ flexDirection: "column", flexGap: 6, width: "match_parent", flex: 1, justifyContent: "center" }}>
           {shown.map(({ habit, stats }) => {
             const done = stats.today.state === "done";
             const numeric = habit.kind === "numeric";
+            const off = !stats.scheduled;
             return (
               <FlexWidget key={habit.id} style={{ flexDirection: "row", alignItems: "center", flexGap: 8, width: "match_parent" }}>
                 <FlexWidget
                   style={{ width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: done ? accent(habit, theme) : "#00000000", borderWidth: done ? 0 : 1.5, borderColor: muted(theme) }}
                   {...(numeric ? openHabit(habit) : { clickAction: "toggle", clickActionData: { habitId: habit.id } })}
                 >
-                  <TextWidget text={numeric ? String(stats.today.value ?? "") : done ? "✓" : ""} style={{ fontSize: numeric ? 8 : 12, fontWeight: "bold", color: done ? "#ffffff" : muted(theme) }} allowFontScaling={false} />
+                  <TextWidget text={off ? "–" : numeric ? String(stats.today.value ?? "") : done ? "✓" : ""} style={{ fontSize: numeric ? 8 : 12, fontWeight: "bold", color: done ? "#ffffff" : muted(theme) }} allowFontScaling={false} />
                 </FlexWidget>
                 <FlexWidget style={{ flex: 1 }} {...openHabit(habit)}>
-                  <TextWidget text={habit.name} maxLines={1} truncate="END" style={{ fontSize: 12, color: fg(theme) }} allowFontScaling={false} />
+                  <TextWidget text={`${habitIcon(habit)} ${habit.name}`} maxLines={1} truncate="END" style={{ fontSize: 12, color: fg(theme) }} allowFontScaling={false} />
                 </FlexWidget>
                 <TextWidget text={`${Math.round(stats.score * 100)}%`} style={{ fontSize: 10, color: muted(theme) }} allowFontScaling={false} />
               </FlexWidget>
@@ -183,6 +185,23 @@ function Today({ view, theme }: { view: TodayView; theme: Theme }) {
           })}
         </FlexWidget>
       )}
+    </FlexWidget>
+  );
+}
+
+/** 1x1: the habit's icon and a tick dot; tap toggles a yes/no day, a numeric habit opens. */
+function Dot({ view, theme }: { view: HabitWidgetView; theme: Theme }) {
+  const { habit, stats } = view;
+  const done = stats.today.state === "done";
+  const numeric = habit.kind === "numeric";
+  return (
+    <FlexWidget
+      style={{ width: "match_parent", height: "match_parent", padding: 5, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: done ? accent(habit, theme) : card(theme), borderWidth: done ? 0 : 1, borderColor: chip(theme) }}
+      {...(numeric ? openHabit(habit) : { clickAction: "toggle", clickActionData: { habitId: habit.id } })}
+      accessibilityLabel={`${habit.name}, ${i18n.t(!stats.scheduled ? "habits:card.weekdays" : done ? "habits:card.doneToday" : "habits:card.notDoneToday")}`}
+    >
+      <TextWidget text={habitIcon(habit)} style={{ fontSize: 22, textAlign: "center" }} allowFontScaling={false} />
+      <TextWidget text={!stats.scheduled ? "–" : done ? "✓" : ""} style={{ fontSize: 11, fontWeight: "bold", color: done ? "#ffffff" : muted(theme), textAlign: "center" }} allowFontScaling={false} />
     </FlexWidget>
   );
 }
@@ -196,10 +215,22 @@ function Empty({ theme, text }: { theme: Theme; text: string }) {
   );
 }
 
+/** A 1x1 widget with no habit chosen yet. */
+function EmptyDot({ theme }: { theme: Theme }) {
+  return (
+    <FlexWidget style={{ width: "match_parent", height: "match_parent", padding: 5, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: card(theme), borderWidth: 1, borderColor: chip(theme) }} clickAction="OPEN_URI" clickActionData={{ uri: "pulse://habits" }}>
+      <TextWidget text="＋" style={{ fontSize: 24, color: muted(theme), textAlign: "center" }} allowFontScaling={false} />
+    </FlexWidget>
+  );
+}
+
 /** The component a widget name draws, in both schemes. */
 export function widgetRepresentation(name: string, view: HabitWidgetView | TodayView | null): WidgetRepresentation {
-  if (!view) return { light: Empty({ theme: "light", text: i18n.t("habits:widget.emptyBody") }), dark: Empty({ theme: "dark", text: i18n.t("habits:widget.emptyBody") }) };
+  if (!view)
+    return name === "HabitDot"
+      ? { light: EmptyDot({ theme: "light" }), dark: EmptyDot({ theme: "dark" }) }
+      : { light: Empty({ theme: "light", text: i18n.t("habits:widget.emptyBody") }), dark: Empty({ theme: "dark", text: i18n.t("habits:widget.emptyBody") }) };
   const draw = (theme: Theme) =>
-    name === "HabitCheck" ? Check({ view: view as HabitWidgetView, theme }) : name === "HabitScore" ? Score({ view: view as HabitWidgetView, theme }) : name === "HabitStreak" ? Streak({ view: view as HabitWidgetView, theme }) : name === "HabitHistory" ? History({ view: view as HabitWidgetView, theme }) : Today({ view: view as TodayView, theme });
+    name === "HabitDot" ? Dot({ view: view as HabitWidgetView, theme }) : name === "HabitCheck" ? Check({ view: view as HabitWidgetView, theme }) : name === "HabitScore" ? Score({ view: view as HabitWidgetView, theme }) : name === "HabitStreak" ? Streak({ view: view as HabitWidgetView, theme }) : name === "HabitHistory" ? History({ view: view as HabitWidgetView, theme }) : Today({ view: view as TodayView, theme });
   return { light: draw("light"), dark: draw("dark") };
 }

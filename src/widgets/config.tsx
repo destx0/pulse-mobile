@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, useColorScheme, V
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { WidgetConfigurationScreenProps } from "react-native-android-widget";
 import type { Habit } from "@/core/habits/types";
+import { habitIcon } from "@/core/habits/icons";
 import { openStore } from "@/data/db";
 import { initI18n, i18n } from "@/i18n/config";
 import { resolveLanguage } from "@/i18n/language";
@@ -64,12 +65,21 @@ export function HabitWidgetConfig({ widgetInfo, renderWidget: draw, setResult }:
                 style={[styles.row, { backgroundColor: c.card, borderColor: on ? c.foreground : c.border }]}
               >
                 <View style={[styles.dot, { backgroundColor: c[habit.color] }]} />
+                <Text style={{ fontSize: 18 }}>{habitIcon(habit)}</Text>
                 <View style={styles.rowText}>
                   <Text style={[styles.name, { color: c.foreground }]} numberOfLines={1}>
                     {habit.name}
                   </Text>
                   <Text style={[styles.meta, { color: c["muted-foreground"] }]} numberOfLines={1}>
-                    {habit.period === "day" ? i18n.t("habits:editor.period_day") : habit.period === "week" ? i18n.t("habits:editor.period_week") : i18n.t("habits:editor.period_month")} · {habit.kind === "numeric" ? `${habit.target} ${habit.unit ?? ""}` : `${habit.target}×`}
+                    {habit.period === "day"
+                      ? habit.weekdaysOnly
+                        ? i18n.t("habits:editor.weekdaysOnly")
+                        : i18n.t("habits:editor.period_day")
+                      : habit.period === "week"
+                        ? i18n.t("habits:editor.period_week")
+                        : habit.period === "month"
+                          ? i18n.t("habits:editor.period_month")
+                          : i18n.t("habits:editor.everyNDays", { count: habit.intervalDays })} · {habit.kind === "numeric" ? `${habit.target} ${habit.unit ?? ""}` : `${habit.target}×`}
                   </Text>
                 </View>
                 {on && <Text style={{ color: c.optimal, fontSize: 18, fontWeight: "700" }}>✓</Text>}

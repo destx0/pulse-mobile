@@ -1,6 +1,6 @@
 // The habits' view models: the cards for today, one habit's history and score, and the editor. The score, streak and
 // period maths live in src/core/habits/logic.ts so the home-screen widgets can use them without React.
-import { habitStats, lastDays, scoreSeries, type DayState, type HabitStats } from "@/core/habits/logic";
+import { dayState, habitStats, lastDays, scoreSeries, type DayState, type HabitStats } from "@/core/habits/logic";
 import type { Habit, HabitEntry } from "@/core/habits/types";
 import { addDays } from "@/lib/time";
 import type { QueryCtx } from "./ctx";
@@ -32,31 +32,22 @@ export function habitCards(habits: readonly Habit[], entries: readonly HabitEntr
     return {
       habit,
       stats,
-      week: days.map((day) => {
-        const e = byDay.get(day);
-        if (!e) return { day, state: { state: "empty", value: null } as DayState };
-        return { day, state: statsForDay(habit, e) };
-      }),
+      week: days.map((day) => ({ day, state: dayState(habit, byDay, day) })),
     };
   });
 }
-
-const statsForDay = (habit: Habit, e: HabitEntry): DayState => {
-  if (e.skip) return { state: "skip", value: e.value };
-  if (habit.kind === "numeric") return { state: "done", value: e.value };
-  return e.value > 0 ? { state: "done", value: e.value } : { state: "no", value: 0 };
-};
 
 export async function getHabits(ctx: QueryCtx): Promise<HabitsVM> {
   const [habits, entries] = await Promise.all([ctx.store.habits(), ctx.store.habitEntries()]);
   const active = habits.filter((h) => !h.archived);
   const archived = habits.filter((h) => h.archived);
   const cards = habitCards(active, entries, ctx.today);
+  const due = cards.filter((c) => c.stats.scheduled);
   return {
     today: ctx.today,
     habits: cards,
     archived: habitCards(archived, entries, ctx.today),
-    summary: { done: cards.filter((c) => c.stats.done).length, total: cards.length },
+    summary: { done: due.filter((c) => c.stats.done).length, total: due.length },
   };
 }
 
@@ -79,8 +70,7 @@ export async function getHabit(ctx: QueryCtx, id: string): Promise<HabitDetailVM
   const from = addDays(ctx.today, -179);
   const days: HabitDay[] = [];
   for (let day = from; day <= ctx.today; day = addDays(day, 1)) {
-    const e = byDay.get(day);
-    days.push({ day, state: e ? statsForDay(habit, e) : { state: "empty", value: null } });
+    days.push({ day, state: dayState(habit, byDay, day) });
   }
   const series = scoreSeries(habit, new Map(mine.map((e) => [e.day, e])), addDays(ctx.today, -89), ctx.today);
   return {

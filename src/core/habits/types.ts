@@ -4,8 +4,8 @@
 /** Yes/no habits count occurrences; numeric habits add up an amount per period. */
 export type HabitKind = "yes_no" | "numeric";
 
-/** How often the target is due. A week runs Monday to Sunday. */
-export type HabitPeriod = "day" | "week" | "month";
+/** How often the target is due. A week runs Monday to Sunday; `interval` is every N days. */
+export type HabitPeriod = "day" | "week" | "month" | "interval";
 
 /** Numeric habits only: a target to reach, or a limit not to exceed. */
 export type HabitTargetType = "at_least" | "at_most";
@@ -25,6 +25,12 @@ export type Habit = {
   kind: HabitKind;
   color: HabitColor;
   period: HabitPeriod;
+  /** `period: "interval"`: the N in every N days (2 to 365); 1 for the other periods. */
+  intervalDays: number;
+  /** A daily habit due Monday to Friday; weekends are neutral and cannot be ticked. */
+  weekdaysOnly: boolean;
+  /** The day an interval habit's blocks are anchored to (local `YYYY-MM-DD`). */
+  startDay: string;
   /** Times per period for yes/no, amount per period for numeric. */
   target: number;
   targetType: HabitTargetType;

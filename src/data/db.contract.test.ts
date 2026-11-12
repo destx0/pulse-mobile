@@ -149,6 +149,7 @@ describe("SqliteStore contract", () => {
   it("keeps habits and their days, replaces a day, and deletes the entries with the habit", async () => {
     const habit: Habit = {
       id: "h1", name: "Read", question: null, notes: null, kind: "yes_no", color: "optimal", period: "week", target: 3,
+      intervalDays: 1, weekdaysOnly: false, startDay: "2026-10-26",
       targetType: "at_least", unit: null, position: 0, archived: false, createdAt: 1, updatedAt: 1,
     };
     await store.putHabit(habit);
