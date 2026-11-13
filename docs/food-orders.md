@@ -1,8 +1,8 @@
 # Food orders from SMS
 
-Pulse counts online food orders from the confirmation messages the delivery apps send. The count appears on Habits as
-the **Food orders** card: this week's count and the last merchant. It is Pulse-only local data: no health source, no
-account, no server.
+Pulse counts online food orders from the confirmation messages the delivery apps send. The count appears on Habits as a
+**Food orders** row in the habits table: a month of per-day counts in the same date columns, with **Scan** beside New
+habit. It is Pulse-only local data: no health source, no account, no server.
 
 ## What is read, and what is kept
 
@@ -50,5 +50,5 @@ flowchart LR
   Parse --> Dedupe[One row per order key]
   Dedupe --> Store[(food_orders)]
   Fresh -->|yes| Store
-  Store --> Card[Week count and last merchant]
+  Store --> Card[Per-day counts in the habits table]
 ```

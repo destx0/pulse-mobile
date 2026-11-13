@@ -2,7 +2,7 @@
 // the amount dialog a numeric habit opens. Pulse's tokens, in the habit tracker's own layout.
 import { useState } from "react";
 import { Modal, Pressable, View } from "react-native";
-import { Check, Minus, X } from "lucide-react-native";
+import { Check, Minus, X, type LucideIcon } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
 import type { Habit, HabitColor } from "@/core/habits/types";
 import type { DayState } from "@/core/habits/logic";
@@ -48,6 +48,29 @@ export function DayMark({ habit, state, color, size = 26, today }: { habit: Habi
       ) : state.state === "skip" ? (
         <Icon icon={Minus} size={12} tone="muted-foreground" strokeWidth={2.5} />
       ) : null}
+    </View>
+  );
+}
+
+/** An exercise day: the workout's glyph in a filled disc when done, a bare ring for today, nothing otherwise. */
+export function ExerciseMark({ icon, color, done, today }: { icon: LucideIcon; color: string; done: boolean; today: boolean }) {
+  return (
+    <View
+      className={cn("items-center justify-center rounded-full border", today && "border-2")}
+      style={{ width: 24, height: 24, borderColor: done ? color : today ? color : "rgba(128,128,128,0.45)", backgroundColor: done ? color : "transparent" }}
+    >
+      {done && <Icon icon={icon} size={13} tone="background" strokeWidth={2.4} />}
+    </View>
+  );
+}
+
+/** A grid's date header: the weekday over the day of the month, today in the foreground. */
+export function DayHeading({ day, today }: { day: string; today: string }) {
+  const now = day === today;
+  return (
+    <View className="h-9 w-10 items-center justify-center gap-0.5">
+      <Text className={cn("text-[9px] font-bold uppercase leading-3 tracking-[0.06em]", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { weekday: "short" })}</Text>
+      <Text className={cn("font-numeric text-[10px] font-semibold leading-3", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { day: "numeric" })}</Text>
     </View>
   );
 }

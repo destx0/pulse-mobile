@@ -2,6 +2,7 @@
 // period maths live in src/core/habits/logic.ts so the home-screen widgets can use them without React.
 import { dayState, habitStats, lastDays, scoreSeries, type DayState, type HabitStats } from "@/core/habits/logic";
 import type { Habit, HabitEntry } from "@/core/habits/types";
+import type { Exercise } from "@/data/types";
 import { addDays } from "@/lib/time";
 import type { QueryCtx } from "./ctx";
 
@@ -16,12 +17,33 @@ export type HabitCardVM = {
 
 export type HabitsVM = {
   today: string;
+  /** The list's days, newest first (today first). */
+  days: string[];
   habits: HabitCardVM[];
   archived: HabitCardVM[];
+  /** The month's workouts by Health Connect exercise type, the most frequent first. */
+  exercise: ExerciseRowVM[];
 };
+
+/** One exercise type's days in the list's window; values are that day's session count. */
+export type ExerciseRowVM = { type: string; days: Record<string, number> };
 
 /** The list's grid holds a month of days; older ones scroll out of view. */
 const LIST_DAYS = 30;
+
+/** The month's workouts grouped by type: badminton, strength training, elliptical, each with its days. */
+function exerciseRows(exercises: readonly Exercise[], from: string): ExerciseRowVM[] {
+  const byType = new Map<string, Record<string, number>>();
+  for (const e of exercises) {
+    if (e.day < from) continue;
+    const days = byType.get(e.type) ?? {};
+    days[e.day] = (days[e.day] ?? 0) + 1;
+    byType.set(e.type, days);
+  }
+  return [...byType]
+    .map(([type, days]) => ({ type, days }))
+    .sort((a, b) => Object.keys(b.days).length - Object.keys(a.days).length || a.type.localeCompare(b.type));
+}
 
 /** The cards for a set of habits and their entries: the tab's grid, and the widget that lists today. */
 export function habitCards(habits: readonly Habit[], entries: readonly HabitEntry[], today: string, count = 7): HabitCardVM[] {
@@ -39,13 +61,15 @@ export function habitCards(habits: readonly Habit[], entries: readonly HabitEntr
 }
 
 export async function getHabits(ctx: QueryCtx): Promise<HabitsVM> {
-  const [habits, entries] = await Promise.all([ctx.store.habits(), ctx.store.habitEntries()]);
+  const [habits, entries, exercises] = await Promise.all([ctx.store.habits(), ctx.store.habitEntries(), ctx.store.allExercises()]);
   const active = habits.filter((h) => !h.archived);
   const archived = habits.filter((h) => h.archived);
   return {
     today: ctx.today,
+    days: lastDays(ctx.today, LIST_DAYS).reverse(),
     habits: habitCards(active, entries, ctx.today, LIST_DAYS),
     archived: habitCards(archived, entries, ctx.today),
+    exercise: exerciseRows(exercises, addDays(ctx.today, -(LIST_DAYS - 1))),
   };
 }
 

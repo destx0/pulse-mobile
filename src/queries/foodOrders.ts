@@ -1,15 +1,22 @@
-// The food-order card's read: this week's count from the SMS confirmations, today's, and the last order.
+// The food-order card's read: this week's count from the SMS confirmations, today's, the last order and the month's
+// days for the card's date grid.
 import type { FoodOrder } from "@/core/food/orders";
 import { addDays } from "@/lib/time";
 import type { QueryCtx } from "./ctx";
 
+/** The card's day grid reaches back a month, as the habits table does. */
+const DAYS = 30;
+
 export type FoodOrdersVM = {
   /** Orders in the last 30 days, newest first. */
   orders: FoodOrder[];
+  /** Today's order count. */
   today: number;
   /** Orders this week, Monday to Sunday. */
   week: number;
   last: FoodOrder | null;
+  /** The last 30 days, newest first (today first), with that day's order count. */
+  days: { day: string; count: number }[];
 };
 
 export async function getFoodOrders(ctx: QueryCtx): Promise<FoodOrdersVM> {
@@ -24,5 +31,9 @@ export async function getFoodOrders(ctx: QueryCtx): Promise<FoodOrdersVM> {
     today: byDay.get(ctx.today) ?? 0,
     week: orders.filter((o) => o.day >= weekStart).length,
     last: orders[0] ?? null,
+    days: Array.from({ length: DAYS }, (_, i) => {
+      const day = addDays(ctx.today, -i);
+      return { day, count: byDay.get(day) ?? 0 };
+    }),
   };
 }

@@ -4,11 +4,14 @@
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Archive, ArchiveRestore, CircleCheckBig, Pencil, Plus, SkipForward, Trash2, type LucideIcon } from "lucide-react-native";
+import { Archive, ArchiveRestore, CircleCheckBig, Code2, Pencil, Plus, SkipForward, Trash2, Utensils, type LucideIcon } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
 import { habitIcon } from "@/core/habits/icons";
-import type { HabitCardVM } from "@/queries/habits";
+import type { HabitCardVM, ExerciseRowVM } from "@/queries/habits";
 import { getHabits } from "@/queries/habits";
+import type { FoodOrdersVM } from "@/queries/foodOrders";
+import { leetcodeView } from "@/leetcode/view";
+import { useLeetCode } from "@/state/leetcode";
 import { archiveHabit, clearHabitEntry, deleteHabit, setHabitEntry, skipHabitDay, toggleHabit } from "@/actions/habits";
 import { actionCtx } from "@/state/app";
 import { habitsChanged } from "@/state/habits";
@@ -28,14 +31,21 @@ import { QueryError } from "@/ui/shells/QueryError";
 import { SectionShell } from "@/ui/shells/SectionShell";
 import { push } from "@/ui/navigate";
 import { toast } from "@/ui/Toast";
-import { DayMark, HabitValueDialog, habitColor } from "./parts";
-import { FoodOrdersCard } from "./FoodOrdersCard";
+import { DayHeading, DayMark, ExerciseMark, HabitValueDialog, habitColor } from "./parts";
+import { useFoodOrders } from "./useFoodOrders";
+import { exerciseIcon, exerciseName } from "./exercise";
 
 const nowS = () => Math.floor(Date.now() / 1000);
 
 export function HabitsScreen() {
   const { t } = useTranslation("habits");
   const { data, error, reload } = useScreen(getHabits, ["habits"], { eager: true, freshMs: 0 });
+  const food = useFoodOrders();
+  const leetcodeState = useLeetCode();
+  // The table's LeetCode row: the connected profile's last 30 days, newest first, as submissions per day.
+  const leetcode = leetcodeState.snapshot
+    ? leetcodeView(leetcodeState.snapshot, actionCtx().timeZone, nowS()).activity.slice(-30).reverse().map((d) => ({ day: d.day, count: d.submissions }))
+    : null;
   const [value, setValue] = useState<{ habit: Habit; day: string; initial: number | null } | null>(null);
   const [removing, setRemoving] = useState<Habit | null>(null);
   const changed = () => habitsChanged();
@@ -80,20 +90,36 @@ export function HabitsScreen() {
       title={t("title")}
       loading={!data}
       actions={
-        <Press activeScale={0.96} accessibilityRole="button" accessibilityLabel={t("new")} onPress={() => push("/habits/edit")} className="h-9 flex-row items-center gap-1.5 rounded-full bg-secondary px-3">
-          <Icon icon={Plus} size={16} tone="foreground" strokeWidth={2.4} />
-          <Text className="text-[12px] font-bold uppercase leading-4 tracking-[0.1em]">{t("new")}</Text>
-        </Press>
+        <>
+          <Press activeScale={0.96} accessibilityRole="button" accessibilityLabel={t("food.scan")} disabled={food.scanning} onPress={() => void food.scan(true)} className="h-9 flex-row items-center gap-1.5 rounded-full bg-secondary px-3">
+            <Icon icon={Utensils} size={15} tone="foreground-secondary" strokeWidth={2} />
+            <Text className="text-[12px] font-bold uppercase leading-4 tracking-[0.1em] text-foreground-secondary">{food.scanning ? t("food.scanning") : t("food.scan")}</Text>
+          </Press>
+          <Press activeScale={0.96} accessibilityRole="button" accessibilityLabel={t("new")} onPress={() => push("/habits/edit")} className="h-9 flex-row items-center gap-1.5 rounded-full bg-secondary px-3">
+            <Icon icon={Plus} size={16} tone="foreground" strokeWidth={2.4} />
+            <Text className="text-[12px] font-bold uppercase leading-4 tracking-[0.1em]">{t("new")}</Text>
+          </Press>
+        </>
       }
     >
       {!data ? (
         error ? <QueryError compact error={error} reload={reload} /> : <View className="h-40" />
       ) : (
         <View className="gap-3">
-          {data.habits.length === 0 ? (
-            <EmptyState icon={CircleCheckBig} body={t("emptyBody")} action={{ label: t("new"), onClick: () => push("/habits/edit") }} />
-          ) : (
-            <HabitGrid cards={data.habits} today={data.today} onToggle={toggle} onSkip={skip} onDelete={setRemoving} onArchive={archive} />
+          {data.habits.length === 0 && <EmptyState icon={CircleCheckBig} body={t("emptyBody")} action={{ label: t("new"), onClick: () => push("/habits/edit") }} />}
+          {(data.habits.length > 0 || food.data || data.exercise.length > 0 || leetcode) && (
+            <HabitGrid
+              days={data.days}
+              cards={data.habits}
+              today={data.today}
+              food={food.data ?? null}
+              exercise={data.exercise}
+              leetcode={leetcode}
+              onToggle={toggle}
+              onSkip={skip}
+              onDelete={setRemoving}
+              onArchive={archive}
+            />
           )}
           {data.archived.length > 0 && (
             <SectionShell variant="section" title={t("archived")}>
@@ -113,7 +139,6 @@ export function HabitsScreen() {
               </Card>
             </SectionShell>
           )}
-          <FoodOrdersCard />
         </View>
       )}
 
@@ -149,24 +174,34 @@ export function HabitsScreen() {
   );
 }
 
-/** The list as a table: a fixed habit column and a month of days that scrolls under today's date header. */
+/** The list as a table: a fixed name column and a month of days that scrolls under today's date header. Habits, food
+ *  orders, the month's workouts and LeetCode are its rows. */
 function HabitGrid({
+  days,
   cards,
   today,
+  food,
+  exercise,
+  leetcode,
   onToggle,
   onSkip,
   onDelete,
   onArchive,
 }: {
+  days: string[];
   cards: HabitCardVM[];
   today: string;
+  food: FoodOrdersVM | null;
+  exercise: ExerciseRowVM[];
+  leetcode: { day: string; count: number }[] | null;
   onToggle: (habit: Habit, day: string) => Promise<void>;
   onSkip: (habit: Habit, day: string) => Promise<void>;
   onDelete: (habit: Habit) => void;
   onArchive: (habit: Habit) => Promise<void>;
 }) {
+  const { t } = useTranslation("habits");
+  const { t: tl } = useTranslation("leetcode");
   const { c } = useTheme();
-  const days = cards[0]?.days ?? [];
   return (
     <Card className="py-0">
       <CardFill />
@@ -176,12 +211,17 @@ function HabitGrid({
           {cards.map((card, i) => (
             <HabitNameCell key={card.habit.id} card={card} today={today} first={i === 0} onSkip={onSkip} onDelete={onDelete} onArchive={onArchive} />
           ))}
+          {food && <GridNameCell icon={Utensils} label={t("food.title")} first={cards.length === 0} />}
+          {exercise.map((row, i) => (
+            <GridNameCell key={row.type} icon={exerciseIcon(row.type)} label={exerciseName(row.type)} first={cards.length === 0 && !food && i === 0} href="/activities" />
+          ))}
+          {leetcode && <GridNameCell icon={Code2} label={tl("title")} first={cards.length === 0 && !food && exercise.length === 0} href="/leetcode" />}
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
           <View>
             <View className="h-9 flex-row border-b border-border">
               {days.map((d) => (
-                <DayHeading key={d.day} day={d.day} today={today} />
+                <DayHeading key={d} day={d} today={today} />
               ))}
             </View>
             {cards.map((card, i) => {
@@ -199,6 +239,32 @@ function HabitGrid({
                 </View>
               );
             })}
+            {food && (
+              <View className={cn("h-11 flex-row", cards.length > 0 && "border-t border-border")}>
+                {food.days.map((d) => (
+                  <CountCell key={d.day} count={d.count} tone="optimal" />
+                ))}
+              </View>
+            )}
+            {exercise.map((row, i) => {
+              const Glyph = exerciseIcon(row.type);
+              return (
+                <View key={row.type} className={cn("h-11 flex-row", (cards.length > 0 || !!food || i > 0) && "border-t border-border")}>
+                  {days.map((day) => (
+                    <View key={day} className="h-11 w-10 items-center justify-center">
+                      <ExerciseMark icon={Glyph} color={c.strain} done={(row.days[day] ?? 0) > 0} today={day === today} />
+                    </View>
+                  ))}
+                </View>
+              );
+            })}
+            {leetcode && (
+              <View className={cn("h-11 flex-row", (cards.length > 0 || !!food || exercise.length > 0) && "border-t border-border")}>
+                {leetcode.map((d) => (
+                  <CountCell key={d.day} count={d.count} tone="coach" />
+                ))}
+              </View>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -206,13 +272,36 @@ function HabitGrid({
   );
 }
 
-/** One date over its tick: the weekday and the day of the month, today in the foreground. */
-function DayHeading({ day, today }: { day: string; today: string }) {
-  const now = day === today;
+/** A day's count (food orders, LeetCode submissions) in the row's tint. */
+function CountCell({ count, tone }: { count: number; tone: "optimal" | "coach" }) {
   return (
-    <View className="h-9 w-10 items-center justify-center gap-0.5">
-      <Text className={cn("text-[9px] font-bold uppercase leading-3 tracking-[0.06em]", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { weekday: "short" })}</Text>
-      <Text className={cn("font-numeric text-[10px] font-semibold leading-3", now ? "text-foreground" : "text-muted-foreground")}>{formatDay(day, { day: "numeric" })}</Text>
+    <View className="h-11 w-10 items-center justify-center">
+      <View className={cn("size-7 items-center justify-center rounded-full", count > 0 ? (tone === "optimal" ? "bg-optimal/15" : "bg-coach/15") : "bg-secondary")}>
+        <Text className={cn("font-numeric text-[12px] font-semibold leading-4", count > 0 ? (tone === "optimal" ? "text-optimal-text" : "text-coach-text") : "text-muted-foreground")}>{count || "·"}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** A non-habit row's fixed cell: a line icon and the row's name; its screen opens on tap when it has one. */
+function GridNameCell({ icon, label, first, href }: { icon: LucideIcon; label: string; first: boolean; href?: string }) {
+  const content = (
+    <>
+      <Icon icon={icon} size={16} tone="foreground-secondary" />
+      <Text className="min-w-0 flex-1 text-[15px] font-semibold leading-5" numberOfLines={1}>
+        {label}
+      </Text>
+    </>
+  );
+  return (
+    <View className={cn("h-11 flex-row items-center px-3", !first && "border-t border-border")}>
+      {href ? (
+        <Press accessibilityRole="link" accessibilityLabel={label} onPress={() => push(href)} className="min-w-0 flex-1 flex-row items-center gap-2">
+          {content}
+        </Press>
+      ) : (
+        <View className="min-w-0 flex-1 flex-row items-center gap-2">{content}</View>
+      )}
     </View>
   );
 }

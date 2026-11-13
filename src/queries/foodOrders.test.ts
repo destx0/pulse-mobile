@@ -15,7 +15,7 @@ beforeEach(() => {
 });
 
 describe("the food orders card", () => {
-  it("counts today, the week from Monday, and the last order", async () => {
+  it("counts today, the week from Monday, the last order and the month's days", async () => {
     await store.putFoodOrder(order("old", "2026-10-30", NOW - 6 * 86_400));
     await store.putFoodOrder(order("monday", "2026-11-02", NOW - 3 * 86_400));
     await store.putFoodOrder(order("tuesday", "2026-11-03", NOW - 2 * 86_400));
@@ -23,5 +23,8 @@ describe("the food orders card", () => {
     await store.putFoodOrder(order("today-b", "2026-11-05", NOW - 60));
     const vm = await getFoodOrders(ctx());
     expect(vm).toMatchObject({ today: 2, week: 4, last: { id: "today-b" } });
+    expect(vm.days).toHaveLength(30);
+    expect(vm.days[0]).toEqual({ day: "2026-11-05", count: 2 });
+    expect(vm.days.find((d) => d.day === "2026-10-30")?.count).toBe(1);
   });
 });
