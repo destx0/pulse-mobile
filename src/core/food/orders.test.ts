@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ordersFromMessages, parseFoodOrder, type SmsMessage } from "./orders";
+import { foodKind, ordersFromMessages, parseFoodOrder, type SmsMessage } from "./orders";
 
 const sms = (over: Partial<SmsMessage> = {}): SmsMessage => ({
   id: "1",
@@ -46,5 +46,16 @@ describe("food orders from SMS", () => {
   it("uses the profile time zone for the day", () => {
     const order = parseFoodOrder(sms({ date: Date.parse("2026-11-02T20:00:00Z") }), "Asia/Kolkata");
     expect(order?.day).toBe("2026-11-03");
+  });
+});
+
+describe("foodKind", () => {
+  it("gives pizzerias and pizza chains the pizza icon, everything else the generic one", () => {
+    expect(foodKind("Boom Pizza - Woodfired Pizzeria")).toBe("pizza");
+    expect(foodKind("Domino's Pizza")).toBe("pizza");
+    expect(foodKind("Domino's")).toBe("pizza");
+    expect(foodKind("La Pino'z")).toBe("pizza");
+    expect(foodKind("Behrouz Biryani")).toBe("food");
+    expect(foodKind("Swiggy")).toBe("food");
   });
 });

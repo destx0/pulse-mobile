@@ -24,7 +24,17 @@ describe("the food orders card", () => {
     const vm = await getFoodOrders(ctx());
     expect(vm).toMatchObject({ today: 2, week: 4, last: { id: "today-b" } });
     expect(vm.days).toHaveLength(30);
-    expect(vm.days[0]).toEqual({ day: "2026-11-05", count: 2 });
+    expect(vm.days[0]).toEqual({ day: "2026-11-05", count: 2, kind: "food" });
+    expect(vm.days[1]).toEqual({ day: "2026-11-04", count: 0, kind: null });
     expect(vm.days.find((d) => d.day === "2026-10-30")?.count).toBe(1);
+  });
+
+  it("marks a day with a pizza order as pizza and any other order day as food", async () => {
+    await store.putFoodOrder({ ...order("boom", "2026-11-05", NOW - 60), merchant: "Boom Pizza - Woodfired Pizzeria" });
+    await store.putFoodOrder(order("biryani", "2026-11-05", NOW - 30));
+    await store.putFoodOrder({ ...order("thali", "2026-11-04", NOW - 86_400), merchant: "Rajdhani Thali" });
+    const vm = await getFoodOrders(ctx());
+    expect(vm.days[0]).toMatchObject({ count: 2, kind: "pizza" });
+    expect(vm.days[1]).toMatchObject({ count: 1, kind: "food" });
   });
 });

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { Activity, Archive, ArchiveRestore, CircleCheckBig, Code2, Pencil, Plus, SkipForward, Trash2, Utensils, type LucideIcon } from "lucide-react-native";
+import { Activity, Archive, ArchiveRestore, CircleCheckBig, Code2, Pencil, Pizza, Plus, SkipForward, Trash2, Utensils, type LucideIcon } from "lucide-react-native";
 import type { Habit } from "@/core/habits/types";
 import { habitIcon } from "@/core/habits/icons";
 import type { ActivityDayVM, HabitCardVM } from "@/queries/habits";
@@ -249,7 +249,7 @@ function HabitGrid({
             {food && (
               <View className={cn("h-11 flex-row", cards.length > 0 && "border-t border-border")}>
                 {food.days.map((d) => (
-                  <CountCell key={d.day} count={d.count} tone="optimal" />
+                  <FoodCell key={d.day} count={d.count} kind={d.kind} />
                 ))}
               </View>
             )}
@@ -320,6 +320,23 @@ function ActivityDayDialog({ day, today, items, onClose }: { day: string | null;
         )
       }
     />
+  );
+}
+
+/** A food-order day: a pizza for a pizza order, the generic plate for any other, a small count when there were several. */
+function FoodCell({ count, kind }: { count: number; kind: FoodOrdersVM["days"][number]["kind"] }) {
+  if (!kind) return <CountCell count={0} tone="optimal" />;
+  return (
+    <View className="h-11 w-10 items-center justify-center">
+      <View className="size-7 items-center justify-center rounded-full bg-optimal/15">
+        <Icon icon={kind === "pizza" ? Pizza : Utensils} size={15} tone="optimal-text" strokeWidth={2.2} />
+      </View>
+      {count > 1 && (
+        <View className="absolute right-0.5 top-1 min-w-4 items-center rounded-full bg-optimal px-1">
+          <Text className="font-numeric text-[10px] font-bold leading-[14px] text-background">{count}</Text>
+        </View>
+      )}
+    </View>
   );
 }
 

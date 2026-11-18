@@ -83,6 +83,13 @@ export function parseFoodOrder(message: SmsMessage, timeZone: string): FoodOrder
   return { id: `sms:${message.id}`, key: keyOf(message.body, merchant, day, ts), day, ts, merchant, source: message.address.slice(0, 80) };
 }
 
+/** The grid's icon for an order: a pizza for a pizzeria or a pizza chain, the generic plate for everything else. */
+export type FoodKind = "pizza" | "food";
+const PIZZA = /\bpizz|\bdomino|\bpapa john|\bla pino|\bovenstory\b|\bmojo\b/i;
+export function foodKind(merchant: string): FoodKind {
+  return PIZZA.test(merchant) ? "pizza" : "food";
+}
+
 /** Every distinct order in a batch, newest message first for an order that sent several. */
 export function ordersFromMessages(messages: readonly SmsMessage[], timeZone: string): FoodOrder[] {
   const found = new Map<string, FoodOrder>();
