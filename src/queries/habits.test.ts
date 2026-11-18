@@ -47,6 +47,8 @@ describe("the habits table's Activity row", () => {
       exercise("e3", "2026-11-11", "WALKING", 10),
       exercise("e5", "2026-11-11", "STRENGTH_TRAINING", 50),
       exercise("e4", "2026-10-01", "ELLIPTICAL", 10),
+      exercise("e6", "2026-11-10", "BIKING", 10),
+      exercise("e7", "2026-11-10", "HIKING", 20),
     ]);
     const now = Date.parse(`${TODAY}T09:00:00Z`) / 1000;
     const ctx: QueryCtx = { store, profile: PROFILE, timeZone: "UTC", today: TODAY, now, sync: { lastSyncTs: null, firstDay: null, lastError: null } };
@@ -55,8 +57,9 @@ describe("the habits table's Activity row", () => {
     expect(vm.days[0]).toBe(TODAY);
     expect(Object.keys(vm.activity).sort()).toEqual(["2026-11-11", TODAY].sort());
     expect(vm.activity[TODAY].kinds).toEqual(["racket"]);
-    expect(vm.activity["2026-11-11"].kinds).toEqual(["walk", "strength"]);
-    expect(vm.activity["2026-11-11"].items.map((i) => i.id)).toEqual(["e3", "e2", "e5"]);
+    // Walks, hikes and rides are not tracked: the 10th, with only those, has no bubble.
+    expect(vm.activity["2026-11-11"].kinds).toEqual(["strength"]);
+    expect(vm.activity["2026-11-11"].items.map((i) => i.id)).toEqual(["e2", "e5"]);
     // 2026-11-12 is a Thursday: the 11th and the 12th are this week, 1 October is not.
     expect(vm.activityWeek).toBe(2);
   });

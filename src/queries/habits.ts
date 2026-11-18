@@ -52,13 +52,17 @@ export type ActivityDayVM = { kinds: ActivityKind[]; items: ActivityItemVM[] };
 /** The list's grid holds a month of days; older ones scroll out of view. */
 const LIST_DAYS = 30;
 
-/** The month's workouts by day, for the one Activity row. */
+/** Everyday movement the watch logs on its own (walks, hikes, rides) is not a workout the row tracks. */
+const UNTRACKED: ReadonlySet<ActivityKind> = new Set(["walk", "ride"]);
+
+/** The month's workouts by day, for the one Activity row. Walks and rides are left out. */
 function activityDays(exercises: readonly Exercise[], from: string): Record<string, ActivityDayVM> {
   const out: Record<string, ActivityDayVM> = {};
   const sorted = exercises.filter((e) => e.day >= from).sort((a, b) => a.startTs - b.startTs);
   for (const e of sorted) {
-    const day = (out[e.day] ??= { kinds: [], items: [] });
     const kind = activityKind(e.type);
+    if (UNTRACKED.has(kind)) continue;
+    const day = (out[e.day] ??= { kinds: [], items: [] });
     if (!day.kinds.includes(kind)) day.kinds.push(kind);
     day.items.push({ id: e.id, kind, type: e.type, name: e.name, startTs: e.startTs, endTs: e.endTs });
   }
