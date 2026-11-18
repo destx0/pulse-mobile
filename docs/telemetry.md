@@ -82,6 +82,8 @@ well inside the free tier's 5M spans; logs are a handful per sync, well inside i
 | `workout.command_failed` | `code`, `kind` | A workout start, pause, resume or finish failed |
 | `workout.storage_failed` | `kind` | The recorder could not read or write its storage |
 | `workout.ingest_failed` | `kind` | Recorded samples could not be stored |
+| `gym.export_failed` | `kind` | A finished gym workout could not be written to Health Connect |
+| `gym.remove_failed` | `kind` | A deleted gym workout's session could not be taken out of Health Connect |
 | `widgets.publish_failed` | `kind` | The widget summary could not be published |
 | `places.event_failed` | `kind` | A geofence arrival or departure could not be stored |
 | `places.fix_failed` | `kind`, `count` | A batch of location fixes could not be stored (`count`: fixes in the batch) |

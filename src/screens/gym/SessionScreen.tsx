@@ -12,6 +12,7 @@ import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
 import { DAY, clock, formatDay } from "@/lib/format";
 import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, reorderExercises, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, skipExercise, skipPendingSets, stopRest, updateRoutineFromSession, updateSession } from "@/actions/gym";
+import { exportGymSession, removeGymSession } from "@/actions/gymHealth";
 import { cancelRest, scheduleRest } from "@/background/notify";
 import { fromUnit, loadText } from "@/core/gym/load";
 import { bestSet, isWorkSet } from "@/core/gym/stats";
@@ -530,6 +531,8 @@ export function SessionScreen() {
           const done = await finishSession(store, latest, nowS());
           const routine = updateTemplate ? await updateRoutineFromSession(store, done, nowS()) : null;
           dataChanged("gym");
+          // Not awaited: the permission sheet, the save and the day's rescore must not hold the summary.
+          void exportGymSession(done, actionCtx().timeZone).then((saved) => { if (saved) dataChanged(); });
           toast.success(routine ? t("session.savedTemplateUpdated") : t("session.saved"));
         }}
       />
@@ -547,6 +550,7 @@ export function SessionScreen() {
           setRestOverride(null);
           void cancelRest();
           await discardSession(store, session.id);
+          if (was === "delete") void removeGymSession(session, actionCtx().timeZone).then(() => dataChanged());
           dataChanged("gym");
           if (was) goBack();
         }}
