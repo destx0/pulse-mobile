@@ -10,8 +10,9 @@ Recovery, Strain and Training Load are exactly what they were.
 |---|---|
 | `/gym` (tab) | The templates page: a workout in progress, the templates in their saved order with the split's next one first, the last sessions, the week's totals, recent records |
 | `/gym/session/[id]` | The tracking page, and the same page read back after a workout ends. Every edit is saved as it happens |
-| `/gym/history` | Every finished workout, grouped by month |
-| `/gym/exercise/[id]` | One lift: its estimated 1RM, the 1RM curve, and every session it was trained in |
+| `/gym/history` | Every finished workout, grouped by month: one card each with an exercise per line and its best set, then length, volume and PRs |
+| `/gym/calendar` | A month grid per month, each workout day ticked; a tap opens that day's workout |
+| `/gym/exercise/[id]` | One lift, in three tabs: History (every session, set by set, with each set's 1RM), Charts, Records |
 | `/gym/exercises` | The picker: search, the lifts trained recently, and the owner's own exercises |
 | `/gym/routine/[id]` | The template editor; `new` starts a blank one |
 | `/gym/records` | The best estimated 1RM of every exercise, newest first |
@@ -85,6 +86,55 @@ tick at the end of the row, `ADD SET` under it, and the workout's timer under it
   when they all are. Each card shows its count ("2/5") beside the name, and Finish turns green once every set is ticked.
 - **Home does not offer today's workout twice.** Once a workout is finished, Home's tile shows it as done for the rest of
   the day (length and sets, no Start); the split's next template is suggested tomorrow. Log weight stays on the tile.
+
+## History, the calendar and an exercise's pages
+
+Strong's History, calendar and exercise pages, in Pulse's look (the reference is the owner's screenshots of Strong).
+
+- **History** lists every finished workout, newest first, under its month ("November · 6 workouts"). A card is the
+  workout's name, the day and time it started, then one line per exercise: "4 × Hack Squat" (working sets) and its best
+  set ("100 kg × 10", "0:20" for a hold, "2.4 km" for cardio). Its foot is the length, the volume and the PRs. Above the
+  list: the workouts this month and the week streak. Cards draw twelve at a time ("Show older workouts"): a five-year log
+  is hundreds of cards, too many to build at once on a small phone.
+- **PRs** on a card count the exercises that workout set a record on, by the same rule as the tracking page's PR marks
+  (`recordCounts` beside `setsRecord` in `src/core/gym/stats.ts`). The first session of an exercise is its first record.
+- **The week streak** is weeks in a row (Monday to Sunday) with at least one workout. This week still counts as alive
+  until it ends without one.
+- **The calendar** (the History header's button, or the two numbers above the list) draws six months at a time, newest
+  first. A workout day is a filled circle with a green tick; today is the solid one.
+- **An exercise's page** opens on Charts once it has two sessions, on History before that, and remembers the tab and
+  range for the next exercise opened.
+  - *History*: one card per session with "Sets performed" and each set's estimated 1RM (warmups marked W, no 1RM).
+  - *Charts*: 3M, 1Y or All. A lift draws its best set's estimated 1RM, its heaviest weight, its volume and its most
+    reps in a set; a bodyweight move draws most reps and total reps; a hold its longest time; cardio its distance and
+    time. One point per session on a time axis, with the latest value and the range's best above each chart. Plain SVG
+    (`GymChart.tsx`), not Skia: four charts on one page stay light.
+  - *Records*: estimated 1RM, heaviest weight, best set volume, best session volume, most reps and longest time, each
+    opening the session it came from; then the rep records, the heaviest weight lifted for at least 1 to 12 reps.
+
+## Sound and touch
+
+The tracking page sounds and buzzes so a workout feels like progress without looking at the phone. Each moment has its
+own clip (`modules/pulse-sound`, made by `scripts/sounds/synth.py`) and its own vibration (`src/screens/gym/feel.ts`):
+
+| Moment | Sound | Vibration |
+|---|---|---|
+| A set ticked | a round pop | one crisp click |
+| A tick taken back | a lower, falling blip | a soft off-click |
+| The last set of an exercise ticked (or Tick all) | two bells a fifth apart | a double tap |
+| A set that beats every earlier estimated 1RM on the exercise | a rising arpeggio with a shimmer | a short drum roll |
+| A set added | a dry wooden knock | a light tap |
+| The workout finished | a low thump, then a rolled major chord | a building buzz |
+| A tick refused (an empty set) | none: the toast says why | a reject buzz |
+
+- The record check runs in the tap's own frame against the records the page has and the sets ticked since, so a second
+  heavy set ticked before the reload must beat the first. The first set an exercise ever had is not a fanfare: there was
+  nothing to beat.
+- **Low memory first.** The clips are Android SoundPool samples (39 KB of OGG in all), decoded only while a workout in
+  progress is open and released when it closes. SoundPool asks for no audio focus, so the music the owner trains to
+  keeps playing under them.
+- **Quiet when the phone is.** A phone on silent or vibrate plays nothing (the vibration stays). The page's menu turns
+  sounds off and on (`pulse.gym.sounds` in AsyncStorage); vibration follows the rest of the app.
 
 ## Gestures
 

@@ -5,7 +5,7 @@ import { openMemoryStore } from "@/data/memory";
 import type { Store } from "@/data/store";
 import type { GymExercise } from "@/core/gym/types";
 import type { QueryCtx } from "@/queries/ctx";
-import { getGymExercise, getGymHome, getGymHistory, getGymSession } from "@/queries/gym";
+import { getGymCalendar, getGymExercise, getGymHome, getGymHistory, getGymSession } from "@/queries/gym";
 import type { ActionCtx } from "@/state/app";
 import { addExerciseToSession, addSet, adjustRest, deleteSet, finishSession, importStrong, moveExercise, reorderExercises, reorderRoutines, restoreSet, restoreSets, saveRoutine, saveSessionAsRoutine, saveSet, skipExercise, skipPendingSets, startRest, startSession, tickSet, undoStrongImport, updateRoutineFromSession } from "./gym";
 
@@ -304,6 +304,15 @@ describe("the import", () => {
     expect(bench?.record?.weightKg).toBe(65);
     expect(bench?.history).toHaveLength(1);
     expect(bench?.series).toHaveLength(1);
+    // The pages built on it: a session per history card, a chart point per session, the records it set.
+    expect(bench?.sessions).toHaveLength(1);
+    expect(bench?.points).toHaveLength(1);
+    expect(bench?.prs.heaviest?.value).toBe(65);
+    expect(history.months[0].cards[0].lines.length).toBeGreaterThan(0);
+    expect(history.months.flatMap((m) => m.cards).every((c) => c.records >= 0)).toBe(true);
+    const calendar = await getGymCalendar(ctx());
+    expect(calendar.total).toBe(2);
+    expect(Object.values(calendar.days).flat()).toHaveLength(2);
   });
 
   it("takes an import back out, sessions and templates together", async () => {

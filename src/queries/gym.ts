@@ -2,7 +2,7 @@
 // Every Postgres read the web app would do is a Store read here.
 import { CATALOGUE } from "@/core/gym/catalogue";
 import { estimate1Rm } from "@/core/gym/load";
-import { bestSet, groupByExercise, hasWork, isRepSet, isWorkSet, oneRmSeries, previousSets, recentExercises, recordsOf, setsRecord, volumeOf, type PersonalRecord } from "@/core/gym/stats";
+import { bestOf, bestSet, exercisePoints, exerciseRecords, groupByExercise, hasWork, isRepSet, isWorkSet, oneRmSeries, previousSets, recentExercises, recordCounts, recordsOf, setsRecord, volumeOf, weekStreak, type Best, type ExercisePoint, type ExerciseRecords, type PersonalRecord } from "@/core/gym/stats";
 import { planDiff, planItemsOf, type PlanItem } from "@/core/gym/plan";
 import type { GymExercise, GymSession, GymSet, MeasurementKind, WeightUnit } from "@/core/gym/types";
 import { MEASUREMENTS } from "@/core/gym/types";
@@ -146,28 +146,103 @@ export async function getGymHome(ctx: QueryCtx): Promise<GymHomeVM> {
   };
 }
 
-export type HistoryVM = { months: { month: string; cards: SessionCard[] }[]; total: number; firstDay: string | null };
+/** One exercise on a history card: "4 × Leg Extension (Machine)" and its best set. */
+export type HistoryLine = { exerciseId: string; name: string; unit: WeightUnit; sets: number; best: Best | null };
 
-/** Every finished session, newest first, grouped by month. */
+/** A finished workout as the history lists it: Strong's card, an exercise per line, then its length, volume and PRs. */
+export type HistoryCard = SessionCard & { lines: HistoryLine[]; records: number };
+
+export type HistoryVM = {
+  months: { month: string; cards: HistoryCard[] }[];
+  total: number;
+  firstDay: string | null;
+  /** Workouts this calendar month, and weeks in a row with one. */
+  thisMonth: number;
+  streak: number;
+};
+
+/** Groups every set by its session, once, for the pages that walk the whole log. */
+function setsBySession(all: readonly GymSet[]): Map<string, GymSet[]> {
+  const out = new Map<string, GymSet[]>();
+  for (const s of all) {
+    const list = out.get(s.sessionId);
+    if (list) list.push(s);
+    else out.set(s.sessionId, [s]);
+  }
+  return out;
+}
+
+/** Every finished session, newest first, grouped by month, each with its exercises' best sets and records. */
 export async function getGymHistory(ctx: QueryCtx): Promise<HistoryVM> {
   const [map, sessions, all] = await Promise.all([exerciseMap(ctx.store), ctx.store.gymSessions(), ctx.store.gymAllSets()]);
-  const bySession = new Map<string, GymSet[]>();
-  for (const s of all) {
-    const list = bySession.get(s.sessionId);
-    if (list) list.push(s);
-    else bySession.set(s.sessionId, [s]);
-  }
-  const cards = sessions
+  const bySession = setsBySession(all);
+  const records = recordCounts(all);
+  const cards: HistoryCard[] = sessions
     .filter((s) => s.finished && hasWork(bySession.get(s.id) ?? []))
-    .map((s) => cardOf(s, bySession.get(s.id) ?? [], map));
-  const months: { month: string; cards: SessionCard[] }[] = [];
+    .map((s) => {
+      const sets = bySession.get(s.id) ?? [];
+      const lines = groupByExercise(sets)
+        .map((g): HistoryLine => {
+          const exercise = map.get(g.exerciseId) ?? ghost(g.exerciseId);
+          return {
+            exerciseId: g.exerciseId,
+            name: exercise.name,
+            unit: exercise.unit,
+            sets: g.sets.filter(isWorkSet).length,
+            best: bestOf(g.sets, { hold: exercise.hold, cardio: exercise.bodyPart === "cardio" }),
+          };
+        })
+        .filter((l) => l.sets > 0);
+      return { ...cardOf(s, sets, map), lines, records: records.get(s.id) ?? 0 };
+    });
+  const months: { month: string; cards: HistoryCard[] }[] = [];
   for (const card of cards) {
     const month = card.day.slice(0, 7);
     const last = months[months.length - 1];
     if (last?.month === month) last.cards.push(card);
     else months.push({ month, cards: [card] });
   }
-  return { months, total: cards.length, firstDay: cards[cards.length - 1]?.day ?? null };
+  return {
+    months,
+    total: cards.length,
+    firstDay: cards[cards.length - 1]?.day ?? null,
+    thisMonth: cards.filter((c) => c.day.slice(0, 7) === ctx.today.slice(0, 7)).length,
+    streak: weekStreak(
+      cards.map((c) => c.day),
+      ctx.today,
+    ),
+  };
+}
+
+/** The calendar `/gym/calendar`: which days had a workout, and the counts over it. */
+export type CalendarVM = {
+  today: string;
+  /** Day → its workouts, oldest first. */
+  days: Record<string, { id: string; name: string }[]>;
+  /** The first month with a workout, "YYYY-MM"; null with none. */
+  firstMonth: string | null;
+  total: number;
+  thisYear: number;
+  streak: number;
+};
+
+export async function getGymCalendar(ctx: QueryCtx): Promise<CalendarVM> {
+  const [sessions, all] = await Promise.all([ctx.store.gymSessions(), ctx.store.gymAllSets()]);
+  const bySession = setsBySession(all);
+  const done = sessions.filter((s) => s.finished && hasWork(bySession.get(s.id) ?? [])).sort((a, b) => a.startTs - b.startTs);
+  const days: Record<string, { id: string; name: string }[]> = {};
+  for (const s of done) (days[s.day] ??= []).push({ id: s.id, name: s.name });
+  return {
+    today: ctx.today,
+    days,
+    firstMonth: done[0]?.day.slice(0, 7) ?? null,
+    total: done.length,
+    thisYear: done.filter((s) => s.day.slice(0, 4) === ctx.today.slice(0, 4)).length,
+    streak: weekStreak(
+      done.map((s) => s.day),
+      ctx.today,
+    ),
+  };
 }
 
 export type Block = {
@@ -238,6 +313,12 @@ export type ExercisePageVM = {
   previousRecord: { oneRm: number; weightKg: number; reps: number } | null;
   series: { ts: number; oneRm: number; weightKg: number; reps: number }[];
   history: { session: SessionCard; sets: GymSet[] }[];
+  /** Every finished session that trained it, newest first, with its ticked sets: the History tab. */
+  sessions: { id: string; name: string; day: string; startTs: number; sets: GymSet[] }[];
+  /** One point per session, oldest first: the Charts tab. */
+  points: ExercisePoint[];
+  /** The Records tab. */
+  prs: ExerciseRecords;
   totalSets: number;
   totalReps: number;
   totalVolumeKg: number;
@@ -269,18 +350,22 @@ export async function getGymExercise(ctx: QueryCtx, exerciseId: string): Promise
     if (list) list.push(s);
     else groups.set(s.sessionId, [s]);
   }
-  const history = [...groups.entries()]
+  const trained = [...groups.entries()]
     .map(([sessionId, list]) => ({ session: byId.get(sessionId), sets: list.sort((a, b) => a.setNo - b.setNo) }))
     .filter((h): h is { session: GymSession; sets: GymSet[] } => !!h.session && h.session.finished && hasWork(h.sets))
-    .sort((a, b) => b.session.startTs - a.session.startTs)
-    .slice(0, 30)
-    .map((h) => ({ session: cardOf(h.session, h.sets, map), sets: h.sets }));
+    .sort((a, b) => b.session.startTs - a.session.startTs);
+  const history = trained.slice(0, 30).map((h) => ({ session: cardOf(h.session, h.sets, map), sets: h.sets }));
+  // Only what the pages read crosses into the cache: finished sessions' ticked sets.
+  const finishedSets = trained.flatMap((h) => h.sets);
   return {
     exercise,
     record,
     previousRecord,
     series: oneRmSeries(sets, exerciseId),
     history,
+    sessions: trained.map((h) => ({ id: h.session.id, name: h.session.name, day: h.session.day, startTs: h.session.startTs, sets: h.sets.filter((x) => x.completed) })),
+    points: exercisePoints(finishedSets),
+    prs: exerciseRecords(finishedSets),
     totalSets: sets.filter((s) => isWorkSet(s)).length,
     totalReps: sets.filter((s) => isWorkSet(s)).reduce((n, s) => n + Math.max(0, s.reps), 0),
     totalVolumeKg: volumeOf(sets),

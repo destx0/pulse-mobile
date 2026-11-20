@@ -146,7 +146,9 @@
     "supersetWith": "Superset with {{name}}",
     "removeSuperset": "Remove superset",
     "skip": "Skip",
-    "remove": "Remove"
+    "remove": "Remove",
+    "soundsOn": "Turn sounds on",
+    "soundsOff": "Turn sounds off"
   },
   "reorder": {
     "templates": "Reorder templates",
@@ -181,7 +183,20 @@
     "title": "History",
     "empty": "No workouts yet",
     "emptyBody": "Finish a workout and it lands here.",
-    "total": "{{count}} workouts"
+    "total": "{{count}} workouts",
+    "monthCount_one": "{{count}} workout",
+    "monthCount_other": "{{count}} workouts",
+    "sets": "Sets",
+    "bestSet": "Best set",
+    "records_one": "{{count}} PR",
+    "records_other": "{{count}} PRs",
+    "thisMonth": "This month",
+    "streak": "Week streak",
+    "weeks_one": "{{count}} week",
+    "weeks_other": "{{count}} weeks",
+    "calendar": "Calendar",
+    "showMore": "Show older workouts",
+    "when": "{{day}} at {{time}}"
   },
   "exercise": {
     "title": "Exercise",
@@ -210,7 +225,41 @@
     "newName": "Exercise name",
     "newBody": "Body part",
     "newEquipment": "Equipment",
-    "create": "Add exercise"
+    "create": "Add exercise",
+    "tabHistory": "History",
+    "tabCharts": "Charts",
+    "tabRecords": "Records",
+    "tabs": "Exercise pages",
+    "chartOneRm": "Best set (est. 1RM)",
+    "chartWeight": "Heaviest weight",
+    "chartVolume": "Total volume",
+    "chartReps": "Most reps in a set",
+    "chartTotalReps": "Total reps",
+    "chartTime": "Longest time",
+    "chartDistance": "Farthest distance",
+    "range": "Range",
+    "range3m": "3M",
+    "range1y": "1Y",
+    "rangeAll": "All",
+    "latest": "Latest",
+    "best": "Best",
+    "notEnough": "Two sessions in this range draw a line.",
+    "setsPerformed": "Sets performed",
+    "oneRm": "1RM",
+    "showMore": "Show more",
+    "recOneRm": "Estimated 1RM",
+    "recHeaviest": "Heaviest weight",
+    "recSetVolume": "Best set volume",
+    "recMostReps": "Most reps",
+    "recSessionVolume": "Best session volume",
+    "recLongest": "Longest time",
+    "repBests": "Rep records",
+    "repBestsHint": "The heaviest weight lifted for at least this many reps.",
+    "repsCol": "Reps",
+    "weightCol": "Weight",
+    "dateCol": "Date",
+    "noRecords": "No records yet",
+    "warmup": "W"
   },
   "records": {
     "title": "Records",
@@ -323,5 +372,16 @@
     "core": "Core",
     "cardio": "Cardio",
     "full body": "Full body"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "total": "All time",
+    "thisYear": "This year",
+    "streak": "Week streak",
+    "empty": "No workouts yet",
+    "emptyBody": "Finished workouts mark their day here.",
+    "showEarlier": "Show earlier months",
+    "day": "{{day}}, {{names}}",
+    "rest": "{{day}}, no workout"
   }
 }

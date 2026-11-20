@@ -156,3 +156,170 @@ export function countTypes(sets: readonly GymSet[]): TypeCounts {
   for (const s of sets) if (s.completed) out[s.type] += 1;
   return out;
 }
+
+/**
+ * The exercises each session set a record on (`setsRecord`'s rule: a set whose estimate beats every earlier one), for
+ * the history's "2 PRs". One pass over the history, oldest first. Sets ticked at the same instant (an imported session
+ * stamps all its sets with its start) do not beat each other, as `setsRecord` skips equal times.
+ */
+export function recordCounts(all: readonly GymSet[]): Map<string, number> {
+  const rated = all
+    .filter((s) => isWorkSet(s) && isRepSet(s) && s.weightKg > 0 && s.reps > 0 && s.ts != null)
+    .map((s) => ({ s, rm: estimate1Rm(s.weightKg, s.reps) }))
+    .sort((a, b) => a.s.ts! - b.s.ts!);
+  const best = new Map<string, number>();
+  const hits = new Map<string, Set<string>>();
+  for (let i = 0; i < rated.length; ) {
+    let j = i;
+    while (j < rated.length && rated[j].s.ts === rated[i].s.ts) j++;
+    const group = rated.slice(i, j);
+    for (const { s, rm } of group) {
+      if (rm > (best.get(s.exerciseId) ?? 0)) {
+        const set = hits.get(s.sessionId) ?? new Set<string>();
+        set.add(s.exerciseId);
+        hits.set(s.sessionId, set);
+      }
+    }
+    for (const { s, rm } of group) if (rm > (best.get(s.exerciseId) ?? 0)) best.set(s.exerciseId, rm);
+    i = j;
+  }
+  return new Map([...hits].map(([id, ex]) => [id, ex.size]));
+}
+
+/** What an exercise's best set in a session was, by what the exercise measures. */
+export type Best =
+  | { kind: "weight"; weightKg: number; reps: number }
+  | { kind: "reps"; reps: number }
+  | { kind: "time"; seconds: number }
+  | { kind: "distance"; meters: number };
+
+/** The set that best shows what an exercise did: the top 1RM, else the most reps, the longest hold or the farthest. */
+export function bestOf(sets: readonly GymSet[], opts: { hold?: boolean; cardio?: boolean } = {}): Best | null {
+  const done = workSets(sets);
+  if (!done.length) return null;
+  const seconds = Math.max(0, ...done.map((s) => s.seconds ?? 0));
+  const meters = Math.max(0, ...done.map((s) => s.distanceM ?? 0));
+  if (opts.hold || done.every((s) => !!s.seconds && !s.reps && !s.distanceM)) return seconds > 0 ? { kind: "time", seconds } : null;
+  if (opts.cardio || done.every((s) => !isRepSet(s))) {
+    if (meters > 0) return { kind: "distance", meters };
+    return seconds > 0 ? { kind: "time", seconds } : null;
+  }
+  const top = bestSet(done);
+  if (top) return { kind: "weight", weightKg: top.weightKg, reps: top.reps };
+  const reps = Math.max(0, ...done.map((s) => s.reps));
+  return reps > 0 ? { kind: "reps", reps } : null;
+}
+
+/** One session of one exercise, as its charts read it. Zero where the session has nothing of that kind. */
+export type ExercisePoint = {
+  sessionId: string;
+  ts: number;
+  /** Best estimated 1RM. */
+  oneRm: number;
+  /** Heaviest weight lifted. */
+  maxWeight: number;
+  /** Weight × reps over the working sets. */
+  volume: number;
+  /** Most reps in one set. */
+  maxReps: number;
+  totalReps: number;
+  /** Longest hold or cardio time in one set. */
+  maxSeconds: number;
+  /** Farthest distance in one set, metres. */
+  maxMeters: number;
+};
+
+/** An exercise's sessions as chart points, oldest first. `ts` is the session's first ticked set. */
+export function exercisePoints(sets: readonly GymSet[]): ExercisePoint[] {
+  const by = new Map<string, ExercisePoint>();
+  for (const s of workSets(sets)) {
+    if (s.ts == null) continue;
+    const p = by.get(s.sessionId) ?? { sessionId: s.sessionId, ts: s.ts, oneRm: 0, maxWeight: 0, volume: 0, maxReps: 0, totalReps: 0, maxSeconds: 0, maxMeters: 0 };
+    p.ts = Math.min(p.ts, s.ts);
+    if (isRepSet(s)) {
+      if (s.weightKg > 0 && s.reps > 0) p.oneRm = Math.max(p.oneRm, estimate1Rm(s.weightKg, s.reps));
+      p.maxWeight = Math.max(p.maxWeight, s.weightKg);
+      p.volume += setVolume(s);
+      p.maxReps = Math.max(p.maxReps, s.reps);
+      p.totalReps += Math.max(0, s.reps);
+    }
+    p.maxSeconds = Math.max(p.maxSeconds, s.seconds ?? 0);
+    p.maxMeters = Math.max(p.maxMeters, s.distanceM ?? 0);
+    by.set(s.sessionId, p);
+  }
+  return [...by.values()].sort((a, b) => a.ts - b.ts);
+}
+
+type Dated = { value: number; ts: number | null; sessionId: string };
+
+/** An exercise's personal records, the Records tab. Each carries when it was set and in which session. */
+export type ExerciseRecords = {
+  oneRm: (Dated & { weightKg: number; reps: number }) | null;
+  heaviest: (Dated & { reps: number }) | null;
+  /** The heaviest single set by weight × reps. */
+  setVolume: (Dated & { weightKg: number; reps: number }) | null;
+  mostReps: (Dated & { weightKg: number }) | null;
+  /** The biggest session by volume. */
+  sessionVolume: Dated | null;
+  longest: Dated | null;
+  /** For 1 to 12 reps: the heaviest weight lifted for at least that many reps. */
+  repBests: { reps: number; weightKg: number; ts: number | null; sessionId: string }[];
+};
+
+export function exerciseRecords(sets: readonly GymSet[]): ExerciseRecords {
+  const out: ExerciseRecords = { oneRm: null, heaviest: null, setVolume: null, mostReps: null, sessionVolume: null, longest: null, repBests: [] };
+  const sessions = new Map<string, { value: number; ts: number | null }>();
+  const reps = new Map<number, { weightKg: number; ts: number | null; sessionId: string }>();
+  for (const s of workSets(sets)) {
+    const at = { ts: s.ts, sessionId: s.sessionId };
+    if ((s.seconds ?? 0) > (out.longest?.value ?? 0)) out.longest = { value: s.seconds!, ...at };
+    if (!isRepSet(s)) continue;
+    if (s.reps > (out.mostReps?.value ?? 0)) out.mostReps = { value: s.reps, weightKg: s.weightKg, ...at };
+    if (s.weightKg <= 0) continue;
+    if (s.weightKg > (out.heaviest?.value ?? 0) || (s.weightKg === out.heaviest?.value && s.reps > out.heaviest.reps)) out.heaviest = { value: s.weightKg, reps: s.reps, ...at };
+    if (s.reps <= 0) continue;
+    const rm = estimate1Rm(s.weightKg, s.reps);
+    if (rm > (out.oneRm?.value ?? 0)) out.oneRm = { value: rm, weightKg: s.weightKg, reps: s.reps, ...at };
+    const vol = setVolume(s);
+    if (vol > (out.setVolume?.value ?? 0)) out.setVolume = { value: vol, weightKg: s.weightKg, reps: s.reps, ...at };
+    const session = sessions.get(s.sessionId) ?? { value: 0, ts: s.ts };
+    session.value += vol;
+    if (s.ts != null && (session.ts == null || s.ts < session.ts)) session.ts = s.ts;
+    sessions.set(s.sessionId, session);
+    for (let r = 1; r <= Math.min(12, s.reps); r++) {
+      const seen = reps.get(r);
+      if (!seen || s.weightKg > seen.weightKg) reps.set(r, { weightKg: s.weightKg, ...at });
+    }
+  }
+  for (const [sessionId, v] of sessions) if (v.value > (out.sessionVolume?.value ?? 0)) out.sessionVolume = { value: v.value, ts: v.ts, sessionId };
+  out.repBests = [...reps.entries()].sort((a, b) => a[0] - b[0]).map(([r, v]) => ({ reps: r, ...v }));
+  return out;
+}
+
+/** "2026-11-16": the Monday that starts the week of `day` (YYYY-MM-DD). */
+export function weekOfDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Weeks in a row with at least one workout, ending this week, or last week while this one has none yet (the streak is
+ * still alive until the week ends without a workout).
+ */
+export function weekStreak(days: readonly string[], today: string): number {
+  const weeks = new Set(days.map(weekOfDay));
+  const step = (week: string, n: number) => {
+    const d = new Date(`${week}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 7 * n);
+    return d.toISOString().slice(0, 10);
+  };
+  let week = weekOfDay(today);
+  if (!weeks.has(week)) week = step(week, -1);
+  let n = 0;
+  while (weeks.has(week)) {
+    n++;
+    week = step(week, -1);
+  }
+  return n;
+}

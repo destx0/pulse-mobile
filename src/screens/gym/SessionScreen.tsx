@@ -7,15 +7,15 @@ import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { useLocalSearchParams, useIsFocused } from "expo-router";
-import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, SkipForward, Trash2 } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronUp, Clock, Dumbbell, History, MoreHorizontal, NotebookPen, Pencil, Plus, Scale, SkipForward, Trash2, Volume2, VolumeX } from "lucide-react-native";
 import { actionCtx, dataChanged } from "@/state/app";
 import { newId } from "@/lib/ids";
 import { DAY, clock, formatDay } from "@/lib/format";
 import { addSet, adjustRest, deleteSet, discardSession, finishSession, moveExercise, reorderExercises, restoreSet, restoreSets, saveSessionAsRoutine, saveSet, setExerciseUnit, setSuperset, skipExercise, skipPendingSets, stopRest, updateRoutineFromSession, updateSession } from "@/actions/gym";
 import { exportGymSession, removeGymSession } from "@/actions/gymHealth";
 import { cancelRest, scheduleRest } from "@/background/notify";
-import { fromUnit, loadText } from "@/core/gym/load";
-import { bestSet, isWorkSet } from "@/core/gym/stats";
+import { estimate1Rm, fromUnit, loadText } from "@/core/gym/load";
+import { bestSet, isRepSet, isWorkSet } from "@/core/gym/stats";
 import type { GymExercise, GymSet, SetType } from "@/core/gym/types";
 import type { Block } from "@/queries/gym";
 import { getGymPicker, getGymSession } from "@/queries/gym";
@@ -41,6 +41,7 @@ import { SwipeActions } from "./SwipeActions";
 import { ReorderSheet } from "./ReorderSheet";
 import { Switch } from "@/screens/settings/controls";
 import { QueryError } from "@/ui/shells/QueryError";
+import { gymFeel, setGymSounds, useGymSoundPool, useGymSounds } from "./feel";
 
 export function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -65,6 +66,12 @@ export function SessionScreen() {
   const flashAt = useRef(0);
   const flashRows = (sets: GymSet[]) => setFlash({ ids: sets.map((s) => s.id), at: ++flashAt.current });
   const { ref: menuRef, anchor, open: openMenu, close: closeMenu } = useMenu();
+  // Sound and touch (feel.ts): the clips are in memory only while a workout is in progress.
+  useGymSoundPool(!!vm && !vm.session.finished);
+  const soundsOn = useGymSounds();
+  // The best estimated 1RM each exercise has reached, as this page ticks sets: a second heavy set ticked before the
+  // reload lands must beat the first one, not the record the view model still shows.
+  const bests = useRef(new Map<string, number>());
 
   // The rest bar reads the session, or this between a ±15 and the row that records it: the countdown appears in the
   // same frame as the tap. `null` hides it (Skip); `undefined` follows the session. A tick no longer starts one.
@@ -109,6 +116,22 @@ export function SessionScreen() {
   const lived = session.endTs ? session.endTs - session.startTs : 0;
   const store = actionCtx().store;
   const sessionUrl = `/gym/session/${session.id}`;
+  /** Which moment a tick is: a record (beats every earlier estimate on the exercise), the exercise's last set, or a set. */
+  const feelTick = (set: GymSet, draft: Draft, on: boolean) => {
+    if (!on) return gymFeel.untick();
+    if (set.type !== "warmup" && isRepSet(draft) && draft.weightKg > 0 && draft.reps > 0) {
+      const rm = estimate1Rm(draft.weightKg, draft.reps);
+      const before = Math.max(vm.records.find((r) => r.exerciseId === set.exerciseId)?.oneRm ?? 0, bests.current.get(set.exerciseId) ?? 0);
+      if (rm > before + 1e-9) {
+        bests.current.set(set.exerciseId, rm);
+        // The first set ever of an exercise is not a record worth a fanfare: there was nothing to beat.
+        if (before > 0) return gymFeel.record();
+      }
+    }
+    const block = vm.blocks.find((b) => b.exercise.id === set.exerciseId);
+    if (block && block.sets.length > 1 && block.sets.every((s) => s.id === set.id || isDone(s))) return gymFeel.exerciseDone();
+    gymFeel.tick();
+  };
   const track = <T,>(job: Promise<T>): Promise<T> => {
     inFlight.current.add(job);
     void job.catch(() => {}).finally(() => inFlight.current.delete(job));
@@ -127,13 +150,16 @@ export function SessionScreen() {
       })(),
     );
   /** A tick draws at once (the row's own state); this writes it and refreshes the numbers behind it. True when written. */
-  const tick = (set: GymSet, draft: Draft, on: boolean): Promise<boolean> =>
+  const tick = (set: GymSet, draft: Draft, on: boolean, quiet = false): Promise<boolean> =>
     track(
       (async (): Promise<boolean> => {
         if (on && draft.reps <= 0 && !(draft.seconds && draft.seconds > 0) && !(draft.distanceM && draft.distanceM > 0)) {
+          gymFeel.refused();
           toast.error(t("session.emptySet"));
           return false;
         }
+        // Felt in the tap's own frame, before the write: a record, the exercise's last set, or just a set.
+        if (!quiet) feelTick(set, draft, on);
         const at = nowS();
         markTicked(set.id, on);
         // No try/catch here: the React Compiler skips a whole component for one, and this page must stay compiled.
@@ -146,13 +172,15 @@ export function SessionScreen() {
         return true;
       })(),
     );
-  /** Tick or untick every set of one exercise, through the same write a row's own tick uses. */
+  /** Tick or untick every set of one exercise, through the same write a row's own tick uses. One sound for the lot. */
   const tickBlock = (block: Block, on: boolean) =>
     track(
       (async () => {
+        if (on) gymFeel.exerciseDone();
+        else gymFeel.untick();
         for (const set of block.sets) {
           if (isDone(set) === on) continue;
-          await tick(set, { weightKg: set.weightKg, reps: set.reps, seconds: set.seconds, distanceM: set.distanceM }, on);
+          await tick(set, { weightKg: set.weightKg, reps: set.reps, seconds: set.seconds, distanceM: set.distanceM }, on, true);
         }
       })(),
     );
@@ -221,6 +249,7 @@ export function SessionScreen() {
   const addOne = (block: Block) =>
     track(
       (async () => {
+        gymFeel.add();
         await addSet(store, session.id, block.exercise.id);
         dataChanged("gym");
       })(),
@@ -486,6 +515,9 @@ export function SessionScreen() {
           <MenuItem icon={NotebookPen} label={t("session.notes")} onPress={() => (closeMenu(), setNotesOpen(true))} />
           {!session.finished && <MenuItem icon={Plus} label={t("session.addExercise")} onPress={() => (closeMenu(), addExercise())} />}
           {!!session.routineId && <MenuItem icon={Dumbbell} label={t("session.updateTemplate")} onPress={() => (closeMenu(), setTemplateOpen(true))} />}
+          {!session.finished && (
+            <MenuItem icon={soundsOn ? VolumeX : Volume2} label={soundsOn ? t("session.soundsOff") : t("session.soundsOn")} onPress={() => (closeMenu(), setGymSounds(!soundsOn))} />
+          )}
           {!session.finished && <MenuItem icon={Trash2} label={t("session.discard")} danger onPress={() => (closeMenu(), setConfirm("discard"))} />}
           {session.finished && <MenuItem icon={Trash2} label={t("session.delete")} danger onPress={() => (closeMenu(), setConfirm("delete"))} />}
         </MenuPanel>
@@ -529,6 +561,7 @@ export function SessionScreen() {
           }
           const latest = (await store.gymSessions()).find((s) => s.id === session.id) ?? session;
           const done = await finishSession(store, latest, nowS());
+          gymFeel.finish();
           const routine = updateTemplate ? await updateRoutineFromSession(store, done, nowS()) : null;
           dataChanged("gym");
           // Not awaited: the permission sheet, the save and the day's rescore must not hold the summary.
@@ -960,7 +993,6 @@ function SetRow({
     const on = !done;
     busy.current = true;
     setDone(on);
-    if (on) haptic.tap();
     // No try/finally: the React Compiler skips a component that has one, and every row would then render on every tap.
     const written = await onTick(set, draft(), on).catch(() => false);
     if (written) {
