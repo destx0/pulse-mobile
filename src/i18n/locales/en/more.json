@@ -56,7 +56,10 @@
     "dailyBodySince": "One row per day since {{date}}: Recovery, Strain, sleep performance, hours and consistency, heart rate variability, resting heart rate, respiratory rate, stress and steps.",
     "journalBody": "Every check-in answer, hidden behaviours included. The JSON also lists your behaviours.",
     "storageNone": "Exports hold only what Pulse stored on this phone.",
-    "storage": "Pulse keeps {{mb}} MB on this phone. Exports hold only what it stored."
+    "storage": "Pulse keeps {{mb}} MB on this phone. Exports hold only what it stored.",
+    "backup": "Full backup",
+    "backupBody": "Everything Pulse keeps on this phone in one file: scores, journal, gym, habits, places and settings. Use it to move to the new Pulse app. Your coach key stays on this phone.",
+    "backupButton": "Export backup"
   },
   "behaviours": {
     "title": "Behaviours",

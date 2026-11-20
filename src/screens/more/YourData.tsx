@@ -1,11 +1,12 @@
 // Your data `/more/data` (U21): your daily scores and journal answers as CSV or JSON. Ported from pulse
 // (app)/more/data/page.tsx and loading.tsx. A download becomes the system share sheet (src/actions/export.ts): Save to
-// Files, AirDrop, Drive, mail. The web's Backup card was never in the page; there is nothing else to export or restore here.
+// Files, AirDrop, Drive, mail. Full backup zips everything for the native Pulse app (src/actions/backup.ts).
 import { useState } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Download } from "lucide-react-native";
 import { type ExportFormat, type ExportKind, shareExport } from "@/actions/export";
+import { shareFullBackup } from "@/actions/backup";
 import { DAY, FORMATS, formatDay } from "@/lib/format";
 import { getYourData } from "@/queries/settings";
 import { queryCtx } from "@/state/app";
@@ -117,6 +118,27 @@ export function YourDataScreen() {
               <View className="mt-4 flex-row gap-2">
                 {link("journal", "csv")}
                 {link("journal", "json")}
+              </View>
+            </SectionShell>
+
+            <SectionShell variant="card" title={t("data.backup")} info={false}>
+              <Text className={BODY}>{t("data.backupBody")}</Text>
+              <View className="mt-4 flex-row gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={busy !== null}
+                  onPress={async () => {
+                    haptic.tap();
+                    setBusy("backup");
+                    const r = await shareFullBackup(queryCtx());
+                    setBusy(null);
+                    if (!r.ok) toast.error(r.error);
+                  }}
+                >
+                  <Icon icon={Download} size={20} tone="secondary-foreground" />
+                  <Text className="text-[13px] font-bold uppercase tracking-[0.1em] text-secondary-foreground">{busy === "backup" ? t("data.preparing") : t("data.backupButton")}</Text>
+                </Button>
               </View>
             </SectionShell>
 
