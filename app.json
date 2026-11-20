@@ -5,7 +5,7 @@
     "platforms": [
       "android"
     ],
-    "version": "0.8.21",
+    "version": "0.8.22",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pulse",
