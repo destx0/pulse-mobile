@@ -55,12 +55,14 @@ describe.each(others)("%s", (lng) => {
   for (const ns of NAMESPACES) {
     const en = load("en", ns)!;
     const tr = load(lng, ns);
-    // A language with no file yet reads English at run time (fallbackLng); a started language must be complete.
+    // This fork writes English only (AGENTS.md "Copy"): a key or a whole file a language lacks reads English at run
+    // time (fallbackLng). What a language does have must still be a key English has, and a sound translation of it.
     if (!tr) continue;
     const enValue = (key: string) => en.get(key) ?? [...en].find(([e]) => base(e) === base(key))?.[1] ?? "";
 
-    it(`${ns}: same keys as English`, () => {
-      expect([...new Set([...tr.keys()].map(base))].sort()).toEqual([...new Set([...en.keys()].map(base))].sort());
+    it(`${ns}: no keys English lacks`, () => {
+      const known = new Set([...en.keys()].map(base));
+      expect([...new Set([...tr.keys()].map(base))].filter((k) => !known.has(k))).toEqual([]);
     });
     it(`${ns}: same placeholders and tags`, () => {
       for (const [key, v] of tr) expect(tokens(v).filter((t) => t !== "{{count}}"), key).toEqual(tokens(enValue(key)).filter((t) => t !== "{{count}}"));

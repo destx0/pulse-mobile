@@ -52,7 +52,8 @@ src/
   widgets/    the Android home-screen widgets: layouts, the headless task handler, the configuration screen, redraws
   dev/        development screens (kit); the routes in app/dev/ load them in development builds only
 plugins/      config plugins (withHighRefreshRate); the widget library's plugin is configured in app.json
-scripts/      release tooling
+modules/      local Expo modules in Kotlin: pulse-bt, pulse-sms, pulse-widgets, pulse-workouts, pulse-sound (the gym's sound effects)
+scripts/      release tooling; sounds/synth.py makes the gym's sound effects
 docs/         rewrite-plan.md, plan.md, design/spec.md, learning.md, onboarding.md, habits.md, timeline.md, runbooks
 ```
 
@@ -73,7 +74,7 @@ docs/         rewrite-plan.md, plan.md, design/spec.md, learning.md, onboarding.
 - **Scoring version.** A change to what the pipeline stores bumps `SCORING_VERSION` (`src/pipeline/types.ts`), which rescores the history. A change to the import mapping bumps `IMPORT_VERSION` (`src/health/sync.ts`), which re-imports the history window.
 - **Long loops yield.** The import and the pipeline await `slice()` (`src/lib/yield.ts`) in long loops so taps and frames get through.
 - **UI.** The look is the pulse PWA's. Build from the shells and kit in `src/ui`, using NativeWind classes and the tokens. Spec decisions and deviations live in `docs/design/spec.md`. A screen that needs a changed view-model field adapts its code, not its look.
-- **Copy.** User-facing text goes through i18n keys (docs/i18n.md); no literal copy in components. It says Pulse, Pulse Age and Health Connect. Where the reference study and WHOOP (noop, `~/personal/noop`) name the same feature differently, the screens use WHOOP's name: Sleep Performance (the study's Sleep Score), Sleep Debt (Sleep Bank), Sleep Need (Sleep Needed), Strain Target (Target Strain), Training Load (Cardio Load), Stress Monitor (Stress). Biological Age is Pulse Age; Energy Bank keeps its name (WHOOP has none).
+- **Copy.** User-facing text goes through i18n keys (docs/i18n.md); no literal copy in components. **English only:** new keys go in `src/i18n/locales/en/` and nowhere else. The other languages came with the upstream app and this fork does not maintain them; a key they lack reads English (`fallbackLng`), and the i18n test allows it. It says Pulse, Pulse Age and Health Connect. Where the reference study and WHOOP (noop, `~/personal/noop`) name the same feature differently, the screens use WHOOP's name: Sleep Performance (the study's Sleep Score), Sleep Debt (Sleep Bank), Sleep Need (Sleep Needed), Strain Target (Target Strain), Training Load (Cardio Load), Stress Monitor (Stress). Biological Age is Pulse Age; Energy Bank keeps its name (WHOOP has none).
 - **Shared files.** The `Store` interface, the UI tokens and the kit's exports change only in the orchestrating session, between waves. A stream that needs a change asks for it in its report.
 - **No native edits.** `android/` is generated (Continuous Native Generation) and git-ignored. Never create or edit it by hand. Configure native behavior in `app.json` and config plugins.
 - **Development builds.** Health Connect is a native module, so the app needs a development build (`pnpm android` or `npx eas-cli@latest build --profile development`), not Expo Go.
@@ -86,7 +87,7 @@ docs/         rewrite-plan.md, plan.md, design/spec.md, learning.md, onboarding.
 - Conventional commit messages, signed off (`git commit -s`).
 - Version bumps are small patch jumps (`0.6.1`, `0.7.1`) unless the owner asks for a larger one; `package.json` and `app.json` move together.
 - **Every APK pushed to pugg is a new version.** Before `pugg` runs: bump the version in `package.json` and `app.json` together, commit it, and push `main`, then build the APK from that commit. The APK's `versionName` is then the version in the repo, so a downloaded build traces back to a commit. Two uploads never carry the same version, even when only the target ABI differs (the emulator's and the phone's builds are the same version, from the same commit).
-- Once typecheck, lint, test and the bundle check pass and the change has been tried on the phone, fast-forward `origin/main`. Never force-push.
+- **Ship when it is ready, without being asked.** Once a change is done and typecheck, lint, test (and the bundle check, when it applies) pass: bump the patch version in `package.json` and `app.json`, commit, push `main`, build the arm64 APK from that commit (`docs/releases.md`, with the Linux paths in the build notes), upload it with `pugg` (the `/pugg-upload` skill) and give the owner the link. The owner tries it on the phone from that link. Never force-push.
 
 ## Testing
 
