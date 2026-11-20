@@ -24,11 +24,11 @@ flowchart LR
 ## Build
 
 On `main`, with a clean tree (`eas build` packs the working tree). The first line exports `SENTRY_AUTH_TOKEN` from the
-git-ignored `.env.local` for the source-map upload (`docs/telemetry.md`); without it the build still works, with
+git-ignored `.env` for the source-map upload (`docs/telemetry.md`); without it the build still works, with
 minified crash stacks.
 
 ```sh
-set -a; [ -f .env.local ] && . ./.env.local; set +a
+export SENTRY_AUTH_TOKEN="$(sed -n 's/^SENTRY_AUTH_TOKEN *= *//p' .env | tr -d '"'"'"' \r')"
 v=$(jq -r .expo.version app.json)
 out=~/personal/pulse-mobile-builds
 for p in preview:arm64 preview-armv7:armv7 preview-x86_64:x86_64; do
@@ -42,7 +42,7 @@ done
 `eas.json` gives the `preview` and `production` profiles `EXPO_PUBLIC_SENTRY_DSN`, `SENTRY_ORG` and `SENTRY_PROJECT`, so
 the APKs people install send error reports (`docs/telemetry.md`); `development` builds send nothing. Readable crash
 stacks also need the source maps uploaded, which takes `SENTRY_AUTH_TOKEN` (a Sentry organization auth token for
-`pulse-fit`) in the shell that runs `eas build --local`. Without it the build still succeeds and skips the upload
+`self-rz2`) in the shell that runs `eas build --local`. Without it the build still succeeds and skips the upload
 (`plugins/withSentryUpload.js`); reports then arrive with minified stacks.
 
 ## Publish

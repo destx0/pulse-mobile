@@ -18,7 +18,7 @@ flowchart LR
   Once -->|no| Drop[dropped on the phone]
   Switch{Send error reports on?} -->|off| Closed[Sentry closed, nothing sent]
   Scrub --> Switch
-  Switch -->|on| Sentry[(Sentry: pulse-fit / pulse-mobile)]
+  Switch -->|on| Sentry[(Sentry: self-rz2 / pulse-mobile)]
 ```
 
 ## What is sent
@@ -107,11 +107,11 @@ Add new codes here when you add a `report` or `reportError` call (AGENTS.md).
 | Variable | Where | What |
 |---|---|---|
 | `EXPO_PUBLIC_SENTRY_DSN` | `eas.json`, `preview` and `production` | Where reports go. Public by design: it ships in every APK. Without it, nothing initialises, so development builds send nothing. |
-| `SENTRY_ORG`, `SENTRY_PROJECT` | `eas.json`, same profiles | `pulse-fit` and `pulse-mobile`, for the source-map upload |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | `eas.json`, same profiles | `self-rz2` and `pulse-mobile`, for the source-map upload |
 | `SENTRY_AUTH_TOKEN` | The shell running `eas build --local`, or an EAS secret | Uploads source maps so crash stacks show source lines. Secret: never commit it. Without it the build skips the upload (`plugins/withSentryUpload.js`). |
 
-To create the token: Sentry › Settings › Organization `pulse-fit` › Organization Tokens › Create New Token (scope
-`org:ci`). Keep it in this repository's `.env.local` as `SENTRY_AUTH_TOKEN=…` (git-ignored by `.env*.local`; mode
+To create the token: Sentry › Settings › Organization `self-rz2` › Organization Tokens › Create New Token (scope
+`org:ci`). Keep it in this repository's `.env` as `SENTRY_AUTH_TOKEN=…` (git-ignored, beside `EXPO_KEY`; mode
 600), so it exists only for this project. Expo commands run here load it; `eas build --local` copies the tracked
 files only, so the build commands in `docs/releases.md` export it first. For cloud builds, also run
 `npx eas-cli@latest env:create --name SENTRY_AUTH_TOKEN --value … --visibility secret`.
